@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robinhood Top 100 — Buy / Sell Signals</title>
+  <meta name="description"
+        content="Top 100 popular Robinhood stocks with Buy/Sell ratings from the 50/200 EMA trend and daily RSI." />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>📈 Robinhood Top 100 Signals</h1>
+      <p class="subtitle">
+        Buy / Sell ratings from the <strong>50&nbsp;/&nbsp;200&nbsp;EMA</strong> trend
+        and the <strong>daily RSI(14)</strong> momentum indicator.
+      </p>
+    </div>
+  </header>
+
+  <div id="sample-banner" class="banner hidden">
+    ⚠️ Showing <strong>sample data</strong> (not real prices). Live data appears
+    once the scheduled GitHub Action runs.
+  </div>
+
+  <main class="wrap">
+    <section class="controls">
+      <input id="search" type="search" placeholder="Search ticker…"
+             autocomplete="off" aria-label="Search ticker" />
+      <div class="filters" id="rating-filters" role="group" aria-label="Filter by rating">
+        <button class="chip active" data-filter="all">All</button>
+        <button class="chip" data-filter="Strong Buy">Strong Buy</button>
+        <button class="chip" data-filter="Buy">Buy</button>
+        <button class="chip" data-filter="Hold">Hold</button>
+        <button class="chip" data-filter="Sell">Sell</button>
+        <button class="chip" data-filter="Strong Sell">Strong Sell</button>
+      </div>
+    </section>
+
+    <section class="summary" id="summary"><!-- filled by JS --></section>
+
+    <div class="table-scroll">
+      <table id="stock-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-key="symbol">Ticker</th>
+            <th class="sortable num" data-key="price">Price</th>
+            <th class="sortable num" data-key="change_pct">Day %</th>
+            <th class="sortable num" data-key="ema50">EMA 50</th>
+            <th class="sortable num" data-key="ema200">EMA 200</th>
+            <th class="sortable" data-key="trend">Trend</th>
+            <th class="sortable num" data-key="rsi">RSI</th>
+            <th class="sortable" data-key="momentum">Momentum</th>
+            <th class="sortable" data-key="score">Rating</th>
+          </tr>
+        </thead>
+        <tbody id="stock-body"><!-- filled by JS --></tbody>
+      </table>
+    </div>
+
+    <p id="empty-state" class="empty hidden">No stocks match your filters.</p>
+  </main>
+
+  <footer class="site-footer wrap">
+    <p>
+      Last updated: <span id="updated-at">—</span> ·
+      Indicators recomputed daily from Yahoo Finance close prices.
+    </p>
+    <p class="disclaimer">
+      <strong>Not financial advice.</strong> These ratings are mechanical signals
+      derived from two technical indicators and are for educational purposes only.
+      Do your own research.
+    </p>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

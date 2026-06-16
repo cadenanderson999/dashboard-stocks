@@ -1,0 +1,57 @@
+name: Update data & deploy to Pages
+
+on:
+  # Refresh after US market close (Mon–Fri). 22:00 UTC ≈ 6 PM ET / 5 PM ET (DST).
+  schedule:
+    - cron: "0 22 * * 1-5"
+  # Allow manual runs from the Actions tab.
+  workflow_dispatch:
+  # Redeploy on pushes to the site itself.
+  push:
+    branches: ["main"]
+
+# Permissions needed to deploy to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Avoid overlapping deploys.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate stock data
+        # Don't fail the deploy if a few tickers are flaky; the script falls
+        # back to sample data and exits non-zero only if EVERYTHING failed.
+        run: python scripts/generate_data.py || echo "Data generation had issues; continuing."
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
