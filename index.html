@@ -36,6 +36,11 @@
         <button class="chip" data-filter="Sell">Sell</button>
         <button class="chip" data-filter="Strong Sell">Strong Sell</button>
       </div>
+      <div class="sort-control">
+        <label for="sort-key">Sort by</label>
+        <select id="sort-key" aria-label="Sort by metric"></select>
+        <button id="sort-dir" class="chip" title="Toggle ascending / descending">↓ Desc</button>
+      </div>
     </section>
 
     <section class="summary" id="summary"><!-- filled by JS --></section>
@@ -47,6 +52,8 @@
             <th class="sortable" data-key="symbol">Ticker</th>
             <th class="sortable num" data-key="price">Price</th>
             <th class="sortable num" data-key="change_pct">Day %</th>
+            <th class="sortable num" data-key="market_cap">Mkt Cap</th>
+            <th class="sortable num" data-key="pe" title="Trailing price-to-earnings ratio">P/E</th>
             <th class="sortable num" data-key="ema50">EMA 50</th>
             <th class="sortable num" data-key="ema200">EMA 200</th>
             <th class="sortable" data-key="trend">Trend</th>

@@ -64,6 +64,21 @@ html, body {
 #search:focus { border-color: var(--accent); }
 
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.sort-control { display: flex; align-items: center; gap: 8px; }
+.sort-control label { color: var(--muted); font-size: 0.85rem; }
+#sort-key {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+}
+#sort-key:focus { border-color: var(--accent); }
+#sort-dir { min-width: 76px; }
 .chip {
   background: var(--panel);
   border: 1px solid var(--border);

@@ -51,6 +51,20 @@ Tunable at the top of `scripts/generate_data.py` via `RVOL_AVG_WINDOW`,
 `RVOL_LOOKBACK`, and `RVOL_THRESHOLD`. (Today's RVOL is also stored in the JSON
 as `rvol_today` if you want to surface it.)
 
+## Sorting & fundamentals
+
+Every numeric column is sortable two ways:
+
+- **Click any column header** to sort by it; click again to flip ascending /
+  descending.
+- Or use the **“Sort by” dropdown + direction toggle** in the toolbar to pick a
+  metric (Price, Day %, Market Cap, P/E, EMA 50/200, RSI, RVOL 30d, Surge Days,
+  Rating, …) and the order.
+
+The header and the dropdown stay in sync. The table also includes **Market Cap**
+and trailing **P/E** for each ticker (fetched best-effort from Yahoo Finance;
+tickers with no earnings show “—” for P/E).
+
 ---
 
 ## Project structure

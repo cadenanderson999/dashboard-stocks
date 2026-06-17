@@ -7,6 +7,27 @@ let searchTerm = "";
 let sortKey = "score";
 let sortDir = "desc"; // 'asc' | 'desc'
 
+// Every numeric/string column the user can sort by (key -> label).
+// Order mirrors the table; used to build the "Sort by" dropdown.
+const SORT_OPTIONS = [
+  ["symbol", "Ticker"],
+  ["price", "Price"],
+  ["change_pct", "Day %"],
+  ["market_cap", "Market Cap"],
+  ["pe", "P/E"],
+  ["ema50", "EMA 50"],
+  ["ema200", "EMA 200"],
+  ["trend", "Trend"],
+  ["rsi", "RSI"],
+  ["momentum", "Momentum"],
+  ["rvol_mean", "RVOL 30d"],
+  ["rvol_high_days", "Surge Days"],
+  ["score", "Rating"],
+];
+
+// Columns sorted as text default to ascending; everything else descending.
+const TEXT_KEYS = ["symbol", "trend", "momentum"];
+
 const RATING_CLASS = {
   "Strong Buy": "pill-strong-buy",
   Buy: "pill-buy",
@@ -34,13 +55,22 @@ async function load() {
     render();
   } catch (err) {
     document.getElementById("stock-body").innerHTML =
-      `<tr><td colspan="11" class="empty">Could not load data: ${err.message}</td></tr>`;
+      `<tr><td colspan="13" class="empty">Could not load data: ${err.message}</td></tr>`;
   }
 }
 
 // --- Helpers -------------------------------------------------------------- //
 function fmt(n, digits = 2) {
   return n === null || n === undefined ? "—" : Number(n).toFixed(digits);
+}
+
+function fmtMarketCap(n) {
+  if (n === null || n === undefined) return "—";
+  const a = Math.abs(n);
+  if (a >= 1e12) return "$" + (n / 1e12).toFixed(2) + "T";
+  if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+  if (a >= 1e6) return "$" + (n / 1e6).toFixed(1) + "M";
+  return "$" + Number(n).toFixed(0);
 }
 
 function pill(rating) {
@@ -104,6 +134,8 @@ function render() {
           <td class="ticker">${s.symbol}<span class="name">${s.name || ""}</span></td>
           <td class="num">$${fmt(s.price)}</td>
           <td class="num ${chgCls}">${chgStr}</td>
+          <td class="num">${fmtMarketCap(s.market_cap)}</td>
+          <td class="num">${fmt(s.pe, 1)}</td>
           <td class="num">${fmt(s.ema50)}</td>
           <td class="num">${fmt(s.ema200)}</td>
           <td class="${trendCls}">${s.trend}</td>
@@ -146,6 +178,27 @@ function updateSortHeaders() {
       th.classList.add(sortDir === "asc" ? "sorted-asc" : "sorted-desc");
     }
   });
+  syncSortControls();
+}
+
+// Default direction when a new sort key is picked.
+function defaultDirFor(key) {
+  return TEXT_KEYS.includes(key) ? "asc" : "desc";
+}
+
+function populateSortControls() {
+  const sel = document.getElementById("sort-key");
+  sel.innerHTML = SORT_OPTIONS.map(
+    ([key, label]) => `<option value="${key}">${label}</option>`
+  ).join("");
+}
+
+// Reflect current sortKey/sortDir in the dropdown + direction button.
+function syncSortControls() {
+  const sel = document.getElementById("sort-key");
+  if (sel && sel.value !== sortKey) sel.value = sortKey;
+  const btn = document.getElementById("sort-dir");
+  if (btn) btn.textContent = sortDir === "asc" ? "↑ Asc" : "↓ Desc";
 }
 
 // --- Events --------------------------------------------------------------- //
@@ -170,11 +223,24 @@ document.querySelectorAll("th.sortable").forEach((th) => {
       sortDir = sortDir === "asc" ? "desc" : "asc";
     } else {
       sortKey = key;
-      // Numeric-ish columns default to descending; text to ascending.
-      sortDir = ["symbol", "trend", "momentum"].includes(key) ? "asc" : "desc";
+      sortDir = defaultDirFor(key);
     }
     render();
   });
 });
 
+// "Sort by" dropdown: picking a metric applies its sensible default direction.
+document.getElementById("sort-key").addEventListener("change", (e) => {
+  sortKey = e.target.value;
+  sortDir = defaultDirFor(sortKey);
+  render();
+});
+
+// Direction toggle button.
+document.getElementById("sort-dir").addEventListener("click", () => {
+  sortDir = sortDir === "asc" ? "desc" : "asc";
+  render();
+});
+
+populateSortControls();
 load();

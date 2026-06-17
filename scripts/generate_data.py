@@ -186,7 +186,37 @@ def make_rating(ema_fast, ema_slow, rsi_value):
     }
 
 
-def build_record(symbol, closes, volumes=None, name=None):
+def fetch_fundamentals(symbols):
+    """Best-effort P/E + market cap per ticker via yfinance (threaded).
+
+    Returns ``{symbol: {"pe": float|None, "market_cap": int|None}}``. Any ticker
+    that fails simply gets ``None`` values -- fundamentals never block the
+    technical ratings, which come from the (more reliable) price download.
+    """
+    import yfinance as yf  # lazy import
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    print(f"Fetching fundamentals (P/E, market cap) for {len(symbols)} tickers...")
+
+    def one(sym):
+        try:
+            info = yf.Ticker(sym).info or {}
+            pe = info.get("trailingPE")
+            mcap = info.get("marketCap")
+            return sym, {"pe": pe, "market_cap": mcap}
+        except Exception:  # noqa: BLE001
+            return sym, {"pe": None, "market_cap": None}
+
+    out = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = [ex.submit(one, s) for s in symbols]
+        for fut in as_completed(futures):
+            sym, d = fut.result()
+            out[sym] = d
+    return out
+
+
+def build_record(symbol, closes, volumes=None, name=None, pe=None, market_cap=None):
     """Compute indicators + rating for one ticker from its price/volume series."""
     ema_fast_series = ema(closes, EMA_FAST) if len(closes) >= EMA_FAST else None
     ema_slow_series = ema(closes, EMA_SLOW) if len(closes) >= EMA_SLOW else None
@@ -215,6 +245,8 @@ def build_record(symbol, closes, volumes=None, name=None):
         "rvol_mean": r(rv["rvol_mean"]),
         "rvol_high_days": rv["rvol_high_days"],
         "rvol_today": r(rv["rvol_today"]),
+        "pe": r(pe, 1),
+        "market_cap": int(market_cap) if isinstance(market_cap, (int, float)) else None,
         **rating,
     }
 
@@ -241,6 +273,8 @@ def fetch_live():
         progress=False,
     )
 
+    fundamentals = fetch_fundamentals(symbols)
+
     for symbol in symbols:
         try:
             df = data if len(symbols) == 1 else data[symbol]
@@ -258,7 +292,11 @@ def fetch_live():
             print(f"  x {symbol}: no data, skipping")
             continue
 
-        records.append(build_record(symbol, closes, volumes))
+        f = fundamentals.get(symbol, {})
+        records.append(build_record(
+            symbol, closes, volumes,
+            pe=f.get("pe"), market_cap=f.get("market_cap"),
+        ))
 
     return records
 
@@ -284,7 +322,12 @@ def generate_sample():
             if rng.random() < 0.08:
                 vol *= rng.uniform(2.0, 4.0)
             volumes.append(vol)
-        records.append(build_record(symbol, closes, volumes))
+        # Plausible fundamentals: most have a P/E, some (no earnings) don't.
+        pe = None if rng.random() < 0.15 else rng.uniform(8, 70)
+        market_cap = closes[-1] * rng.uniform(1e7, 6e9)
+        records.append(build_record(
+            symbol, closes, volumes, pe=pe, market_cap=market_cap,
+        ))
     return records
 
 
