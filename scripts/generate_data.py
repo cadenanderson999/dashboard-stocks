@@ -39,6 +39,12 @@ from tickers import ROBINHOOD_TOP_100  # noqa: E402
 EMA_FAST = 50
 EMA_SLOW = 200
 RSI_PERIOD = 14
+
+# Relative-volume (RVOL) parameters.
+RVOL_AVG_WINDOW = 50   # trailing average volume window (days)
+RVOL_LOOKBACK = 30     # aggregate RVOL over this many recent trading days
+RVOL_THRESHOLD = 2.0   # a day is a "surge" when RVOL exceeds this multiple
+
 # Need at least EMA_SLOW points for a meaningful 200 EMA; ask for ~2 years.
 LOOKBACK = "2y"
 
@@ -83,6 +89,43 @@ def rsi(values, period=RSI_PERIOD):
         return 100.0
     rs = avg_gain / avg_loss
     return 100.0 - (100.0 / (1.0 + rs))
+
+
+def rvol_stats(volumes, avg_window=RVOL_AVG_WINDOW, lookback=RVOL_LOOKBACK,
+               threshold=RVOL_THRESHOLD):
+    """Relative-volume statistics over the last ``lookback`` trading days.
+
+    For each day, RVOL = that day's volume / the trailing ``avg_window``-day
+    average volume (the average uses the days *before* the current one). We then
+    aggregate the most recent ``lookback`` daily RVOLs into:
+
+      * rvol_mean      -- mean RVOL over the window (≈ how busy vs. normal)
+      * rvol_high_days -- count of days with RVOL > ``threshold`` (volume surges)
+      * rvol_today     -- the most recent day's RVOL
+
+    Returns a dict; values are None when there isn't enough history.
+    """
+    none = {"rvol_mean": None, "rvol_high_days": None,
+            "rvol_today": None, "rvol_days_counted": 0}
+    if not volumes or len(volumes) < avg_window + 1:
+        return none
+
+    daily_rvol = []
+    for i in range(avg_window, len(volumes)):
+        trailing_avg = sum(volumes[i - avg_window:i]) / avg_window
+        if trailing_avg > 0:
+            daily_rvol.append(volumes[i] / trailing_avg)
+
+    if not daily_rvol:
+        return none
+
+    window = daily_rvol[-lookback:]
+    return {
+        "rvol_mean": sum(window) / len(window),
+        "rvol_high_days": sum(1 for r in window if r > threshold),
+        "rvol_today": daily_rvol[-1],
+        "rvol_days_counted": len(window),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -143,13 +186,14 @@ def make_rating(ema_fast, ema_slow, rsi_value):
     }
 
 
-def build_record(symbol, closes, name=None):
-    """Compute indicators + rating for one ticker from its close series."""
+def build_record(symbol, closes, volumes=None, name=None):
+    """Compute indicators + rating for one ticker from its price/volume series."""
     ema_fast_series = ema(closes, EMA_FAST) if len(closes) >= EMA_FAST else None
     ema_slow_series = ema(closes, EMA_SLOW) if len(closes) >= EMA_SLOW else None
     ema_fast = ema_fast_series[-1] if ema_fast_series else None
     ema_slow = ema_slow_series[-1] if ema_slow_series else None
     rsi_value = rsi(closes)
+    rv = rvol_stats(volumes or [])
 
     price = closes[-1] if closes else None
     prev = closes[-2] if len(closes) >= 2 else None
@@ -168,6 +212,9 @@ def build_record(symbol, closes, name=None):
         "ema50": r(ema_fast),
         "ema200": r(ema_slow),
         "rsi": r(rsi_value, 1),
+        "rvol_mean": r(rv["rvol_mean"]),
+        "rvol_high_days": rv["rvol_high_days"],
+        "rvol_today": r(rv["rvol_today"]),
         **rating,
     }
 
@@ -196,12 +243,13 @@ def fetch_live():
 
     for symbol in symbols:
         try:
-            if len(symbols) == 1:
-                closes = data["Close"].dropna().tolist()
-            else:
-                closes = data[symbol]["Close"].dropna().tolist()
+            df = data if len(symbols) == 1 else data[symbol]
+            # Keep close + volume aligned by dropping rows missing either.
+            sub = df[["Close", "Volume"]].dropna()
+            closes = sub["Close"].tolist()
+            volumes = sub["Volume"].tolist()
         except (KeyError, TypeError):
-            closes = []
+            closes, volumes = [], []
 
         if len(closes) < EMA_SLOW:
             print(f"  ! {symbol}: only {len(closes)} closes — limited indicators")
@@ -210,7 +258,7 @@ def fetch_live():
             print(f"  x {symbol}: no data, skipping")
             continue
 
-        records.append(build_record(symbol, closes))
+        records.append(build_record(symbol, closes, volumes))
 
     return records
 
@@ -222,15 +270,21 @@ def generate_sample():
     records = []
     for symbol in ROBINHOOD_TOP_100:
         base = rng.uniform(15, 500)
-        # Build a synthetic but plausible close series with a drift + noise.
+        base_vol = rng.uniform(1e6, 5e7)
+        # Build a synthetic but plausible close + volume series.
         drift = rng.uniform(-0.0015, 0.0020)
-        closes = []
+        closes, volumes = [], []
         price = base
         for _ in range(260):
             price *= 1.0 + drift + rng.uniform(-0.02, 0.02)
             price = max(price, 1.0)
             closes.append(price)
-        records.append(build_record(symbol, closes))
+            # Normal-ish volume with occasional surges.
+            vol = base_vol * rng.uniform(0.6, 1.4)
+            if rng.random() < 0.08:
+                vol *= rng.uniform(2.0, 4.0)
+            volumes.append(vol)
+        records.append(build_record(symbol, closes, volumes))
     return records
 
 
@@ -248,6 +302,9 @@ def write_output(records, is_sample):
             "ema_fast": EMA_FAST,
             "ema_slow": EMA_SLOW,
             "rsi_period": RSI_PERIOD,
+            "rvol_avg_window": RVOL_AVG_WINDOW,
+            "rvol_lookback": RVOL_LOOKBACK,
+            "rvol_threshold": RVOL_THRESHOLD,
             "timeframe": "1d",
         },
         "count": len(records),

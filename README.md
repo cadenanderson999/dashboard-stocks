@@ -7,6 +7,8 @@ classic technical indicators:
 - **50 / 200 EMA** — the trend (golden cross vs. death cross)
 - **Daily RSI(14)** — momentum (overbought vs. oversold)
 
+It also reports **relative volume (RVOL)** so you can spot unusual activity.
+
 Data is fetched from Yahoo Finance (free, no API key) by a Python script, and a
 scheduled **GitHub Action** refreshes it every weekday and deploys the site to
 **GitHub Pages**.
@@ -32,6 +34,22 @@ For each ticker, on the **daily** timeframe:
 Indicator parameters live at the top of `scripts/generate_data.py`
 (`EMA_FAST`, `EMA_SLOW`, `RSI_PERIOD`) and the ticker list is in
 `scripts/tickers.py` — edit either to taste.
+
+## Relative volume (RVOL)
+
+Alongside the rating, each ticker shows how heavily it's been trading:
+
+- For every day, **RVOL = that day's volume ÷ its trailing 50-day average
+  volume** (1.0 = a normal day, 2.0 = twice normal).
+- These daily RVOLs are aggregated over the **last 30 trading days** into two
+  columns:
+  - **RVOL 30d** — the *mean* RVOL (overall how busy vs. normal).
+  - **Surge Days** — *count* of days with RVOL above the threshold (default
+    **2×**), i.e. genuine volume spikes.
+
+Tunable at the top of `scripts/generate_data.py` via `RVOL_AVG_WINDOW`,
+`RVOL_LOOKBACK`, and `RVOL_THRESHOLD`. (Today's RVOL is also stored in the JSON
+as `rvol_today` if you want to surface it.)
 
 ---
 

@@ -34,7 +34,7 @@ async function load() {
     render();
   } catch (err) {
     document.getElementById("stock-body").innerHTML =
-      `<tr><td colspan="9" class="empty">Could not load data: ${err.message}</td></tr>`;
+      `<tr><td colspan="11" class="empty">Could not load data: ${err.message}</td></tr>`;
   }
 }
 
@@ -93,6 +93,12 @@ function render() {
         : s.trend === "Bearish" ? "trend-bearish" : "";
       const momCls = s.momentum === "Oversold" ? "mom-oversold"
         : s.momentum === "Overbought" ? "mom-overbought" : "mom-neutral";
+      // Highlight elevated relative volume.
+      const rvolCls = s.rvol_mean >= 1.5 ? "rvol-high"
+        : s.rvol_mean >= 1.15 ? "rvol-mid" : "";
+      const surgeCls = s.rvol_high_days > 0 ? "rvol-high" : "";
+      const surgeStr = s.rvol_high_days === null || s.rvol_high_days === undefined
+        ? "—" : s.rvol_high_days;
       return `
         <tr>
           <td class="ticker">${s.symbol}<span class="name">${s.name || ""}</span></td>
@@ -103,6 +109,8 @@ function render() {
           <td class="${trendCls}">${s.trend}</td>
           <td class="num">${fmt(s.rsi, 1)}</td>
           <td class="${momCls}">${s.momentum}</td>
+          <td class="num ${rvolCls}">${fmt(s.rvol_mean)}×</td>
+          <td class="num ${surgeCls}">${surgeStr}</td>
           <td>${pill(s.rating)}<span class="reason">${s.reason || ""}</span></td>
         </tr>`;
     })

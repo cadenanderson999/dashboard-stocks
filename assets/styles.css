@@ -143,6 +143,8 @@ tbody tr:hover { background: var(--panel-2); }
 
 .trend-bullish { color: var(--green); }
 .trend-bearish { color: var(--red); }
+.rvol-mid  { color: var(--yellow); }
+.rvol-high { color: #ff8a8a; font-weight: 700; }
 .mom-oversold  { color: #4be0a0; }
 .mom-overbought{ color: #ff8a8a; }
 .mom-neutral   { color: var(--muted); }
