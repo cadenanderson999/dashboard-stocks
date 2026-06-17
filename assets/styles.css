@@ -105,54 +105,6 @@ html, body {
 .chip:hover { color: var(--text); border-color: #36425e; }
 .chip.active { background: var(--panel-2); color: var(--text); border-color: var(--accent); }
 
-.range-filter { margin-bottom: 16px; }
-.range-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.range-row .dash { color: var(--muted); }
-#range-key {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  outline: none;
-}
-#range-min, #range-max {
-  width: 90px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text);
-  padding: 8px 12px;
-  font-size: 0.85rem;
-  outline: none;
-}
-#range-min:focus, #range-max:focus, #range-key:focus { border-color: var(--accent); }
-
-.active-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--accent);
-  color: var(--text);
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 0.82rem;
-}
-.filter-chip .x {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0;
-}
-.filter-chip .x:hover { color: var(--red); }
-
 .summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -257,7 +209,7 @@ td .reason {
 /* ------------------------------------------------------------------ *
  * Responsive: the table has many columns, so hide the lowest-priority
  * ones as the screen narrows. Horizontal scroll remains as a fallback,
- * and every metric is still reachable via the Sort / range filters.
+ * and every metric is still reachable via the Sort control.
  * Column order: 1 Ticker · 2 Price · 3 Day% · 4 MktCap · 5 P/E ·
  * 6 EMA50 · 7 EMA200 · 8 Trend · 9 RSI · 10 Momentum · 11 RVOL ·
  * 12 Surge · 13 Sector · 14 Rating

@@ -83,15 +83,6 @@ The header and the dropdown stay in sync. The table also includes **Market Cap**
 and trailing **P/E** for each ticker (fetched best-effort from Yahoo Finance;
 tickers with no earnings show “—” for P/E).
 
-### Numeric range filters
-
-Above the table you can also **filter by value**: pick a metric, enter a min
-and/or max, and click **Add filter**. Filters stack, so you can combine them —
-e.g. `P/E ≤ 20` **and** `RSI ≤ 30` **and** `RVOL 30d ≥ 1.5` to find cheap,
-oversold names trading on heavier-than-usual volume. Each active filter shows as
-a removable chip, with **Clear all** to reset. (Tickers missing a value for a
-filtered metric are excluded from that filter.)
-
 ---
 
 ## Project structure

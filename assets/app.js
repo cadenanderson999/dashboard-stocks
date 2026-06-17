@@ -8,7 +8,6 @@ let filterSector = "all";
 let searchTerm = "";
 let sortKey = "score";
 let sortDir = "desc"; // 'asc' | 'desc'
-let rangeFilters = []; // [{ key, label, min, max }]
 
 // Every numeric/string column the user can sort by (key -> label).
 // Order mirrors the table; used to build the "Sort by" dropdown.
@@ -31,10 +30,6 @@ const SORT_OPTIONS = [
 
 // Columns sorted as text default to ascending; everything else descending.
 const TEXT_KEYS = ["symbol", "trend", "momentum", "sector"];
-
-// Numeric metrics that support min/max range filtering.
-const NUMERIC_OPTIONS = SORT_OPTIONS.filter(([k]) => !TEXT_KEYS.includes(k));
-const LABELS = Object.fromEntries(SORT_OPTIONS);
 
 const RATING_CLASS = {
   "Strong Buy": "pill-strong-buy",
@@ -116,22 +111,12 @@ function render() {
       !term ||
       s.symbol.toLowerCase().includes(term) ||
       (s.name || "").toLowerCase().includes(term);
-    const matchesRanges = rangeFilters.every((f) => {
-      const v = s[f.key];
-      // A row with no value can't satisfy a numeric range -> exclude it.
-      if (v === null || v === undefined) return false;
-      if (f.min !== null && v < f.min) return false;
-      if (f.max !== null && v > f.max) return false;
-      return true;
-    });
-    return matchesRating && matchesUniverse && matchesSector &&
-      matchesSearch && matchesRanges;
+    return matchesRating && matchesUniverse && matchesSector && matchesSearch;
   });
 
   rows.sort(compare);
 
   renderSummary(rows);
-  renderActiveFilters();
 
   const count = document.getElementById("result-count");
   if (count) {
@@ -227,13 +212,6 @@ function populateSortControls() {
   ).join("");
 }
 
-function populateRangeControls() {
-  const sel = document.getElementById("range-key");
-  sel.innerHTML = NUMERIC_OPTIONS.map(
-    ([key, label]) => `<option value="${key}">${label}</option>`
-  ).join("");
-}
-
 function populateUniverseFilter(lists) {
   const sel = document.getElementById("universe-filter");
   sel.innerHTML =
@@ -246,29 +224,6 @@ function populateSectorFilter(sectors) {
   sel.innerHTML =
     `<option value="all">All sectors</option>` +
     sectors.map((s) => `<option value="${s}">${s}</option>`).join("");
-}
-
-// Human-readable description of one range filter, e.g. "P/E ≤ 20".
-function describeFilter(f) {
-  if (f.min !== null && f.max !== null) return `${f.label}: ${f.min}–${f.max}`;
-  if (f.min !== null) return `${f.label} ≥ ${f.min}`;
-  return `${f.label} ≤ ${f.max}`;
-}
-
-function renderActiveFilters() {
-  const box = document.getElementById("active-filters");
-  if (!rangeFilters.length) {
-    box.innerHTML = "";
-    return;
-  }
-  const chips = rangeFilters
-    .map(
-      (f, i) =>
-        `<span class="filter-chip">${describeFilter(f)}` +
-        `<button class="x" data-idx="${i}" aria-label="Remove filter">×</button></span>`
-    )
-    .join("");
-  box.innerHTML = chips + `<button id="clear-filters" class="chip">Clear all</button>`;
 }
 
 // Reflect current sortKey/sortDir in the dropdown + direction button.
@@ -330,37 +285,5 @@ document.getElementById("sort-dir").addEventListener("click", () => {
   render();
 });
 
-// Range filter: add a min/max constraint on the chosen metric.
-document.getElementById("range-add").addEventListener("click", () => {
-  const key = document.getElementById("range-key").value;
-  const minEl = document.getElementById("range-min");
-  const maxEl = document.getElementById("range-max");
-  const min = minEl.value === "" ? null : Number(minEl.value);
-  const max = maxEl.value === "" ? null : Number(maxEl.value);
-  if (min === null && max === null) return; // nothing to filter
-
-  // Replace any existing filter on the same metric.
-  rangeFilters = rangeFilters.filter((f) => f.key !== key);
-  rangeFilters.push({ key, label: LABELS[key], min, max });
-  minEl.value = "";
-  maxEl.value = "";
-  render();
-});
-
-// Remove a single chip or clear all (event-delegated).
-document.getElementById("active-filters").addEventListener("click", (e) => {
-  if (e.target.id === "clear-filters") {
-    rangeFilters = [];
-    render();
-    return;
-  }
-  const x = e.target.closest(".x");
-  if (x) {
-    rangeFilters.splice(Number(x.dataset.idx), 1);
-    render();
-  }
-});
-
 populateSortControls();
-populateRangeControls();
 load();
