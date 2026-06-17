@@ -63,6 +63,18 @@ html, body {
 }
 #search:focus { border-color: var(--accent); }
 
+#universe-filter, #sector-filter {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+#universe-filter:focus, #sector-filter:focus { border-color: var(--accent); }
+
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .sort-control { display: flex; align-items: center; gap: 8px; }
@@ -186,6 +198,20 @@ tbody tr:hover { background: var(--panel-2); }
 
 .ticker { font-weight: 700; }
 .ticker .name { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; }
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  vertical-align: middle;
+  letter-spacing: 0.03em;
+}
+.badge-rh { background: rgba(0,200,5,0.15); color: var(--accent); border: 1px solid #00c80544; }
+.badge-sp { background: rgba(99,140,255,0.15); color: #8fa6ff; border: 1px solid #638cff44; }
+.sector-cell { color: var(--muted); font-size: 0.82rem; }
+.result-count { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
 
 .pos { color: var(--green); }
 .neg { color: var(--red); }

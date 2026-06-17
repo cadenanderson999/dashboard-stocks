@@ -1,13 +1,15 @@
-# 📈 Robinhood Top 100 — Buy / Sell Signals
+# 📈 Stock Signals — Robinhood 100 + S&P 500
 
-A free, static website that lists the **top ~100 most popular stock tickers on
-Robinhood** and assigns each one a **Buy / Sell rating** derived from two
-classic technical indicators:
+A free, static website covering the **Robinhood Top 100** *and* the **S&P 500**
+(~500+ unique tickers), assigning each one a **Buy / Sell rating** derived from
+two classic technical indicators:
 
 - **50 / 200 EMA** — the trend (golden cross vs. death cross)
 - **Daily RSI(14)** — momentum (overbought vs. oversold)
 
-It also reports **relative volume (RVOL)** so you can spot unusual activity.
+It also reports **relative volume (RVOL)** so you can spot unusual activity, and
+tags every ticker by **list** (Robinhood 100 / S&P 500) and **GICS sector** so
+you can slice the universe.
 
 Data is fetched from Yahoo Finance (free, no API key) by a Python script, and a
 scheduled **GitHub Action** refreshes it every weekday and deploys the site to
@@ -32,8 +34,24 @@ For each ticker, on the **daily** timeframe:
 | Bearish | < 30 (oversold) | **Hold** | Downtrend but possible bounce |
 
 Indicator parameters live at the top of `scripts/generate_data.py`
-(`EMA_FAST`, `EMA_SLOW`, `RSI_PERIOD`) and the ticker list is in
+(`EMA_FAST`, `EMA_SLOW`, `RSI_PERIOD`) and the ticker lists are in
 `scripts/tickers.py` — edit either to taste.
+
+## The stock universe
+
+The universe is the **union of two lists**, and each ticker is tagged with the
+list(s) it belongs to plus its GICS sector:
+
+- **Robinhood 100** — a curated list in `scripts/tickers.py`
+  (`ROBINHOOD_TOP_100`), with sectors in `RH_SECTORS`.
+- **S&P 500** — fetched **live from Wikipedia** at generation time (current
+  constituents + sectors). If that fetch ever fails, a committed static snapshot
+  (`SP500_FALLBACK` in `scripts/tickers.py`) is used instead, so generation never
+  breaks. The live list is authoritative and stays current automatically.
+
+In the UI, the **List** and **Sector** dropdowns filter the table, each row shows
+small **RH / S&P badges**, and a "Showing X of Y" count reflects the active
+filters (which compose with search, rating, sorting, and range filters).
 
 ## Relative volume (RVOL)
 

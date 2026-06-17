@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Robinhood Top 100 — Buy / Sell Signals</title>
+  <title>Stock Signals — Robinhood 100 + S&amp;P 500</title>
   <meta name="description"
-        content="Top 100 popular Robinhood stocks with Buy/Sell ratings from the 50/200 EMA trend and daily RSI." />
+        content="Robinhood Top 100 and S&P 500 stocks with Buy/Sell ratings from the 50/200 EMA trend and daily RSI, plus relative volume, P/E and sector filters." />
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="wrap">
-      <h1>📈 Robinhood Top 100 Signals</h1>
+      <h1>📈 Stock Signals</h1>
       <p class="subtitle">
-        Buy / Sell ratings from the <strong>50&nbsp;/&nbsp;200&nbsp;EMA</strong> trend
-        and the <strong>daily RSI(14)</strong> momentum indicator.
+        <strong>Robinhood&nbsp;100</strong> + <strong>S&amp;P&nbsp;500</strong> with
+        Buy&nbsp;/&nbsp;Sell ratings from the <strong>50&nbsp;/&nbsp;200&nbsp;EMA</strong>
+        trend and the <strong>daily RSI(14)</strong> momentum indicator.
       </p>
     </div>
   </header>
@@ -28,6 +29,8 @@
     <section class="controls">
       <input id="search" type="search" placeholder="Search ticker…"
              autocomplete="off" aria-label="Search ticker" />
+      <select id="universe-filter" aria-label="Filter by list"></select>
+      <select id="sector-filter" aria-label="Filter by sector"></select>
       <div class="filters" id="rating-filters" role="group" aria-label="Filter by rating">
         <button class="chip active" data-filter="all">All</button>
         <button class="chip" data-filter="Strong Buy">Strong Buy</button>
@@ -58,6 +61,8 @@
 
     <section class="summary" id="summary"><!-- filled by JS --></section>
 
+    <p id="result-count" class="result-count"></p>
+
     <div class="table-scroll">
       <table id="stock-table">
         <thead>
@@ -74,6 +79,7 @@
             <th class="sortable" data-key="momentum">Momentum</th>
             <th class="sortable num" data-key="rvol_mean" title="Mean relative volume over the last 30 trading days (1.0 = normal)">RVOL 30d</th>
             <th class="sortable num" data-key="rvol_high_days" title="Number of the last 30 days with volume above 2× its 50-day average">Surge Days</th>
+            <th class="sortable" data-key="sector">Sector</th>
             <th class="sortable" data-key="score">Rating</th>
           </tr>
         </thead>

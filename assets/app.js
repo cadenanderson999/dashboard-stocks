@@ -3,6 +3,8 @@
 // State
 let STOCKS = [];
 let filterRating = "all";
+let filterUniverse = "all";
+let filterSector = "all";
 let searchTerm = "";
 let sortKey = "score";
 let sortDir = "desc"; // 'asc' | 'desc'
@@ -23,11 +25,12 @@ const SORT_OPTIONS = [
   ["momentum", "Momentum"],
   ["rvol_mean", "RVOL 30d"],
   ["rvol_high_days", "Surge Days"],
+  ["sector", "Sector"],
   ["score", "Rating"],
 ];
 
 // Columns sorted as text default to ascending; everything else descending.
-const TEXT_KEYS = ["symbol", "trend", "momentum"];
+const TEXT_KEYS = ["symbol", "trend", "momentum", "sector"];
 
 // Numeric metrics that support min/max range filtering.
 const NUMERIC_OPTIONS = SORT_OPTIONS.filter(([k]) => !TEXT_KEYS.includes(k));
@@ -50,6 +53,9 @@ async function load() {
     const data = await res.json();
     STOCKS = data.stocks || [];
 
+    populateUniverseFilter(data.lists || []);
+    populateSectorFilter(data.sectors || []);
+
     if (data.is_sample) {
       document.getElementById("sample-banner").classList.remove("hidden");
     }
@@ -60,7 +66,7 @@ async function load() {
     render();
   } catch (err) {
     document.getElementById("stock-body").innerHTML =
-      `<tr><td colspan="13" class="empty">Could not load data: ${err.message}</td></tr>`;
+      `<tr><td colspan="14" class="empty">Could not load data: ${err.message}</td></tr>`;
   }
 }
 
@@ -103,6 +109,9 @@ function render() {
   const term = searchTerm.trim().toLowerCase();
   let rows = STOCKS.filter((s) => {
     const matchesRating = filterRating === "all" || s.rating === filterRating;
+    const matchesUniverse =
+      filterUniverse === "all" || (s.lists || []).includes(filterUniverse);
+    const matchesSector = filterSector === "all" || s.sector === filterSector;
     const matchesSearch =
       !term ||
       s.symbol.toLowerCase().includes(term) ||
@@ -115,13 +124,19 @@ function render() {
       if (f.max !== null && v > f.max) return false;
       return true;
     });
-    return matchesRating && matchesSearch && matchesRanges;
+    return matchesRating && matchesUniverse && matchesSector &&
+      matchesSearch && matchesRanges;
   });
 
   rows.sort(compare);
 
-  renderSummary();
+  renderSummary(rows);
   renderActiveFilters();
+
+  const count = document.getElementById("result-count");
+  if (count) {
+    count.textContent = `Showing ${rows.length} of ${STOCKS.length} stocks`;
+  }
 
   const body = document.getElementById("stock-body");
   document.getElementById("empty-state").classList.toggle("hidden", rows.length > 0);
@@ -143,9 +158,13 @@ function render() {
       const surgeCls = s.rvol_high_days > 0 ? "rvol-high" : "";
       const surgeStr = s.rvol_high_days === null || s.rvol_high_days === undefined
         ? "—" : s.rvol_high_days;
+      const badges = (s.lists || [])
+        .map((l) => `<span class="badge badge-${l === "S&P 500" ? "sp" : "rh"}">` +
+          `${l === "S&P 500" ? "S&P" : "RH"}</span>`)
+        .join("");
       return `
         <tr>
-          <td class="ticker">${s.symbol}<span class="name">${s.name || ""}</span></td>
+          <td class="ticker">${s.symbol}${badges}<span class="name">${s.name || ""}</span></td>
           <td class="num">$${fmt(s.price)}</td>
           <td class="num ${chgCls}">${chgStr}</td>
           <td class="num">${fmtMarketCap(s.market_cap)}</td>
@@ -157,6 +176,7 @@ function render() {
           <td class="${momCls}">${s.momentum}</td>
           <td class="num ${rvolCls}">${fmt(s.rvol_mean)}×</td>
           <td class="num ${surgeCls}">${surgeStr}</td>
+          <td class="sector-cell">${s.sector || "—"}</td>
           <td>${pill(s.rating)}<span class="reason">${s.reason || ""}</span></td>
         </tr>`;
     })
@@ -165,9 +185,9 @@ function render() {
   updateSortHeaders();
 }
 
-function renderSummary() {
+function renderSummary(rows) {
   const counts = { "Strong Buy": 0, Buy: 0, Hold: 0, Sell: 0, "Strong Sell": 0 };
-  STOCKS.forEach((s) => {
+  rows.forEach((s) => {
     if (counts[s.rating] !== undefined) counts[s.rating]++;
   });
   const cards = [
@@ -214,6 +234,20 @@ function populateRangeControls() {
   ).join("");
 }
 
+function populateUniverseFilter(lists) {
+  const sel = document.getElementById("universe-filter");
+  sel.innerHTML =
+    `<option value="all">All lists</option>` +
+    lists.map((l) => `<option value="${l}">${l}</option>`).join("");
+}
+
+function populateSectorFilter(sectors) {
+  const sel = document.getElementById("sector-filter");
+  sel.innerHTML =
+    `<option value="all">All sectors</option>` +
+    sectors.map((s) => `<option value="${s}">${s}</option>`).join("");
+}
+
 // Human-readable description of one range filter, e.g. "P/E ≤ 20".
 function describeFilter(f) {
   if (f.min !== null && f.max !== null) return `${f.label}: ${f.min}–${f.max}`;
@@ -248,6 +282,16 @@ function syncSortControls() {
 // --- Events --------------------------------------------------------------- //
 document.getElementById("search").addEventListener("input", (e) => {
   searchTerm = e.target.value;
+  render();
+});
+
+document.getElementById("universe-filter").addEventListener("change", (e) => {
+  filterUniverse = e.target.value;
+  render();
+});
+
+document.getElementById("sector-filter").addEventListener("change", (e) => {
+  filterSector = e.target.value;
   render();
 });
 

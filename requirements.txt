@@ -1,1 +1,3 @@
 yfinance>=0.2.40
+# pandas.read_html (used to fetch the live S&P 500 list) needs an HTML parser.
+lxml>=5.0

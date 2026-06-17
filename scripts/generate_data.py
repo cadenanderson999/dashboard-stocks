@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Fetch daily prices for the Robinhood Top 100 and compute trading signals.
+"""Fetch daily prices for the stock universe and compute trading signals.
+
+The universe is the union of the Robinhood Top 100 and the S&P 500. Each ticker
+is tagged with the list(s) it belongs to and its GICS sector.
 
 For every ticker this computes, on the **daily** timeframe:
 
@@ -33,7 +36,19 @@ from datetime import datetime, timezone
 
 # tickers.py lives next to this file.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tickers import ROBINHOOD_TOP_100  # noqa: E402
+from tickers import (  # noqa: E402
+    ROBINHOOD_TOP_100,
+    RH_SECTORS,
+    sp500_fallback_map,
+)
+
+# Universe list labels.
+RH_LIST = "Robinhood 100"
+SP_LIST = "S&P 500"
+
+# Browser-like UA so Wikipedia doesn't 403 the fallback fetch.
+WIKI_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) dashboard-stocks/1.0"
+SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 
 # Indicator parameters.
 EMA_FAST = 50
@@ -186,6 +201,76 @@ def make_rating(ema_fast, ema_slow, rsi_value):
     }
 
 
+def fetch_sp500():
+    """Fetch the current S&P 500 from Wikipedia: ``{symbol: {sector, name}}``.
+
+    Returns an empty dict on any failure (caller falls back to the static list).
+    """
+    import urllib.request
+    from io import StringIO
+    import pandas as pd
+
+    try:
+        req = urllib.request.Request(SP500_WIKI_URL, headers={"User-Agent": WIKI_UA})
+        html = urllib.request.urlopen(req, timeout=30).read().decode("utf-8")
+        df = pd.read_html(StringIO(html))[0]
+    except Exception as exc:  # noqa: BLE001
+        print(f"S&P 500 live fetch failed ({exc}); using static fallback.",
+              file=sys.stderr)
+        return {}
+
+    out = {}
+    for _, row in df.iterrows():
+        # Yahoo uses dashes, Wikipedia uses dots (e.g. BRK.B -> BRK-B).
+        sym = str(row["Symbol"]).strip().replace(".", "-")
+        out[sym] = {
+            "sector": str(row["GICS Sector"]).strip(),
+            "name": str(row["Security"]).strip(),
+        }
+    print(f"Fetched {len(out)} S&P 500 constituents from Wikipedia.")
+    return out
+
+
+def build_universe(live=True):
+    """Build the merged universe: ``{symbol: {sector, name, lists}}``.
+
+    Union of the Robinhood Top 100 and the S&P 500. When ``live`` is True the S&P
+    list is fetched from Wikipedia (with static fallback); otherwise the static
+    fallback is used directly (used by --sample to avoid a network call).
+    """
+    sp = (fetch_sp500() if live else {}) or sp500_fallback_map()
+
+    universe = {}
+
+    def slot(sym):
+        return universe.setdefault(
+            sym, {"sector": None, "name": None, "lists": set()}
+        )
+
+    for sym in ROBINHOOD_TOP_100:
+        u = slot(sym)
+        u["lists"].add(RH_LIST)
+        # Seed sector from the RH map; S&P may overwrite with the official one.
+        u["sector"] = u["sector"] or RH_SECTORS.get(sym)
+
+    for sym, meta in sp.items():
+        u = slot(sym)
+        u["lists"].add(SP_LIST)
+        if meta.get("sector"):
+            u["sector"] = meta["sector"]
+        if meta.get("name"):
+            u["name"] = meta["name"]
+
+    # Guarantee every ticker has a sector label.
+    for u in universe.values():
+        u["sector"] = u["sector"] or "Other"
+
+    print(f"Universe: {len(universe)} unique tickers "
+          f"({sum(RH_LIST in u['lists'] for u in universe.values())} Robinhood, "
+          f"{sum(SP_LIST in u['lists'] for u in universe.values())} S&P 500).")
+    return universe
+
+
 def fetch_fundamentals(symbols):
     """Best-effort P/E + market cap per ticker via yfinance (threaded).
 
@@ -216,7 +301,8 @@ def fetch_fundamentals(symbols):
     return out
 
 
-def build_record(symbol, closes, volumes=None, name=None, pe=None, market_cap=None):
+def build_record(symbol, closes, volumes=None, name=None, pe=None,
+                 market_cap=None, sector=None, lists=None):
     """Compute indicators + rating for one ticker from its price/volume series."""
     ema_fast_series = ema(closes, EMA_FAST) if len(closes) >= EMA_FAST else None
     ema_slow_series = ema(closes, EMA_SLOW) if len(closes) >= EMA_SLOW else None
@@ -247,6 +333,8 @@ def build_record(symbol, closes, volumes=None, name=None, pe=None, market_cap=No
         "rvol_today": r(rv["rvol_today"]),
         "pe": r(pe, 1),
         "market_cap": int(market_cap) if isinstance(market_cap, (int, float)) else None,
+        "sector": sector or "Other",
+        "lists": sorted(lists) if lists else [],
         **rating,
     }
 
@@ -254,50 +342,64 @@ def build_record(symbol, closes, volumes=None, name=None, pe=None, market_cap=No
 # --------------------------------------------------------------------------- #
 # Data acquisition
 # --------------------------------------------------------------------------- #
-def fetch_live():
-    """Fetch real data via yfinance. Returns list of records (may be empty)."""
+def download_prices(symbols, chunk=100):
+    """Download daily close+volume for many symbols, chunked to be API-friendly.
+
+    Returns ``{symbol: (closes, volumes)}`` (empty tuples for failures).
+    """
     import yfinance as yf  # imported lazily so --sample works without it
 
-    records = []
-    symbols = ROBINHOOD_TOP_100
+    out = {}
+    for i in range(0, len(symbols), chunk):
+        part = symbols[i:i + chunk]
+        print(f"  downloading {i + 1}-{i + len(part)} of {len(symbols)}...")
+        data = yf.download(
+            tickers=part,
+            period=LOOKBACK,
+            interval="1d",
+            group_by="ticker",
+            auto_adjust=True,
+            threads=True,
+            progress=False,
+        )
+        for sym in part:
+            try:
+                df = data if len(part) == 1 else data[sym]
+                # Keep close + volume aligned by dropping rows missing either.
+                sub = df[["Close", "Volume"]].dropna()
+                out[sym] = (sub["Close"].tolist(), sub["Volume"].tolist())
+            except (KeyError, TypeError):
+                out[sym] = ([], [])
+    return out
+
+
+def fetch_live():
+    """Fetch real data via yfinance. Returns list of records (may be empty)."""
+    universe = build_universe()
+    symbols = list(universe.keys())
     print(f"Downloading {len(symbols)} tickers from Yahoo Finance ({LOOKBACK})...")
 
-    # Batch download is far faster and gentler on the API than one-at-a-time.
-    data = yf.download(
-        tickers=symbols,
-        period=LOOKBACK,
-        interval="1d",
-        group_by="ticker",
-        auto_adjust=True,
-        threads=True,
-        progress=False,
-    )
-
+    prices = download_prices(symbols)
     fundamentals = fetch_fundamentals(symbols)
 
+    records = []
+    skipped = 0
     for symbol in symbols:
-        try:
-            df = data if len(symbols) == 1 else data[symbol]
-            # Keep close + volume aligned by dropping rows missing either.
-            sub = df[["Close", "Volume"]].dropna()
-            closes = sub["Close"].tolist()
-            volumes = sub["Volume"].tolist()
-        except (KeyError, TypeError):
-            closes, volumes = [], []
-
-        if len(closes) < EMA_SLOW:
-            print(f"  ! {symbol}: only {len(closes)} closes — limited indicators")
-
+        closes, volumes = prices.get(symbol, ([], []))
         if not closes:
-            print(f"  x {symbol}: no data, skipping")
+            skipped += 1
             continue
 
+        meta = universe[symbol]
         f = fundamentals.get(symbol, {})
         records.append(build_record(
             symbol, closes, volumes,
+            name=meta.get("name"),
             pe=f.get("pe"), market_cap=f.get("market_cap"),
+            sector=meta.get("sector"), lists=meta.get("lists"),
         ))
 
+    print(f"Built {len(records)} records ({skipped} tickers had no usable data).")
     return records
 
 
@@ -305,8 +407,10 @@ def generate_sample():
     """Deterministic, clearly-fake data so the UI renders without network."""
     print("Generating SAMPLE data (not real market prices).")
     rng = random.Random(42)
+    # Use the static universe so sample data mirrors the real shape/size.
+    universe = build_universe(live=False)
     records = []
-    for symbol in ROBINHOOD_TOP_100:
+    for symbol, meta in universe.items():
         base = rng.uniform(15, 500)
         base_vol = rng.uniform(1e6, 5e7)
         # Build a synthetic but plausible close + volume series.
@@ -326,7 +430,9 @@ def generate_sample():
         pe = None if rng.random() < 0.15 else rng.uniform(8, 70)
         market_cap = closes[-1] * rng.uniform(1e7, 6e9)
         records.append(build_record(
-            symbol, closes, volumes, pe=pe, market_cap=market_cap,
+            symbol, closes, volumes, name=meta.get("name"),
+            pe=pe, market_cap=market_cap,
+            sector=meta.get("sector"), lists=meta.get("lists"),
         ))
     return records
 
@@ -337,6 +443,10 @@ def generate_sample():
 def write_output(records, is_sample):
     # Sort: strongest buys first, then by RSI.
     records.sort(key=lambda r: (-(r.get("score") or 0), r.get("rsi") or 50))
+
+    # Distinct lists + sectors present, for building the front-end filters.
+    lists = sorted({l for r in records for l in r.get("lists", [])})
+    sectors = sorted({r.get("sector") for r in records if r.get("sector")})
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -350,6 +460,8 @@ def write_output(records, is_sample):
             "rvol_threshold": RVOL_THRESHOLD,
             "timeframe": "1d",
         },
+        "lists": lists,
+        "sectors": sectors,
         "count": len(records),
         "stocks": records,
     }
