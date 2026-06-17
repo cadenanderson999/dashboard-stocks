@@ -33,8 +33,6 @@ html, body {
   padding: 32px 0 24px;
 }
 .site-header h1 { margin: 0 0 6px; font-size: 1.8rem; }
-.subtitle { margin: 0; color: var(--muted); font-size: 0.98rem; }
-.subtitle strong { color: var(--text); }
 
 .banner {
   background: #3a2d10;
