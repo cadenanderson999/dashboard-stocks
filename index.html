@@ -43,6 +43,19 @@
       </div>
     </section>
 
+    <section class="range-filter">
+      <div class="range-row">
+        <select id="range-key" aria-label="Metric to filter"></select>
+        <input id="range-min" type="number" step="any" placeholder="min"
+               aria-label="Minimum value" />
+        <span class="dash">–</span>
+        <input id="range-max" type="number" step="any" placeholder="max"
+               aria-label="Maximum value" />
+        <button id="range-add" class="chip">Add filter</button>
+      </div>
+      <div id="active-filters" class="active-filters"><!-- filled by JS --></div>
+    </section>
+
     <section class="summary" id="summary"><!-- filled by JS --></section>
 
     <div class="table-scroll">
