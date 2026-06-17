@@ -24,7 +24,8 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { width: min(1100px, 92vw); margin: 0 auto; }
+/* The data table is dense, so use a generous width and let it scroll if needed. */
+.wrap { width: min(1320px, 95vw); margin: 0 auto; }
 
 .site-header {
   background: linear-gradient(180deg, #101727 0%, var(--bg) 100%);
@@ -174,10 +175,10 @@ html, body {
   border-radius: var(--radius);
   background: var(--panel);
 }
-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 thead th {
   text-align: left;
-  padding: 12px 14px;
+  padding: 11px 10px;
   color: var(--muted);
   font-weight: 600;
   border-bottom: 1px solid var(--border);
@@ -192,7 +193,7 @@ th.sorted-asc::after { content: " ▲"; color: var(--accent); }
 th.sorted-desc::after { content: " ▼"; color: var(--accent); }
 th.num, td.num { text-align: right; }
 
-tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody td { padding: 10px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--panel-2); }
 
@@ -243,7 +244,7 @@ td .reason {
   color: var(--muted);
   font-size: 0.72rem;
   white-space: normal;
-  max-width: 240px;
+  max-width: 200px;
   margin-top: 2px;
 }
 
@@ -253,7 +254,34 @@ td .reason {
 .site-footer { padding: 24px 0 40px; color: var(--muted); font-size: 0.82rem; }
 .site-footer .disclaimer { margin-top: 6px; }
 
+/* ------------------------------------------------------------------ *
+ * Responsive: the table has many columns, so hide the lowest-priority
+ * ones as the screen narrows. Horizontal scroll remains as a fallback,
+ * and every metric is still reachable via the Sort / range filters.
+ * Column order: 1 Ticker · 2 Price · 3 Day% · 4 MktCap · 5 P/E ·
+ * 6 EMA50 · 7 EMA200 · 8 Trend · 9 RSI · 10 Momentum · 11 RVOL ·
+ * 12 Surge · 13 Sector · 14 Rating
+ * ------------------------------------------------------------------ */
+@media (max-width: 1180px) {
+  /* EMA 50 / EMA 200 — the Trend column already summarizes them. */
+  #stock-table th:nth-child(6), #stock-table td:nth-child(6),
+  #stock-table th:nth-child(7), #stock-table td:nth-child(7) { display: none; }
+  td .reason { display: none; }
+}
+
+@media (max-width: 1000px) {
+  /* Sector — still available via the Sector filter. */
+  #stock-table th:nth-child(13), #stock-table td:nth-child(13) { display: none; }
+}
+
+@media (max-width: 840px) {
+  /* Market Cap + P/E. */
+  #stock-table th:nth-child(4), #stock-table td:nth-child(4),
+  #stock-table th:nth-child(5), #stock-table td:nth-child(5) { display: none; }
+}
+
 @media (max-width: 640px) {
   .site-header h1 { font-size: 1.4rem; }
-  td .reason { display: none; }
+  /* Momentum — RSI conveys the same momentum read. */
+  #stock-table th:nth-child(10), #stock-table td:nth-child(10) { display: none; }
 }
