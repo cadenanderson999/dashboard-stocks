@@ -265,3 +265,22 @@ td .reason {
   /* Momentum — RSI conveys the same momentum read. */
   #stock-table th:nth-child(10), #stock-table td:nth-child(10) { display: none; }
 }
+
+/* Scanner table (15 cols): same idea. Order: 1 Ticker · 2 Price · 3 Day% ·
+ * 4 MktCap · 5 P/E · 6 EMA50 · 7 EMA200 · 8 Trend · 9 RSI · 10 Momentum ·
+ * 11 RVOL30d · 12 Surge · 13 RVOL Today · 14 Sector · 15 Rating. */
+@media (max-width: 1180px) {
+  #scan-table th:nth-child(6), #scan-table td:nth-child(6),
+  #scan-table th:nth-child(7), #scan-table td:nth-child(7) { display: none; }
+  #scan-table td .reason { display: none; }
+}
+@media (max-width: 1000px) {
+  #scan-table th:nth-child(14), #scan-table td:nth-child(14) { display: none; }
+}
+@media (max-width: 840px) {
+  #scan-table th:nth-child(4), #scan-table td:nth-child(4),
+  #scan-table th:nth-child(5), #scan-table td:nth-child(5) { display: none; }
+}
+@media (max-width: 640px) {
+  #scan-table th:nth-child(10), #scan-table td:nth-child(10) { display: none; }
+}

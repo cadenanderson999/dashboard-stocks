@@ -286,11 +286,13 @@ def fetch_fundamentals(symbols):
     def one(sym):
         try:
             info = yf.Ticker(sym).info or {}
-            pe = info.get("trailingPE")
-            mcap = info.get("marketCap")
-            return sym, {"pe": pe, "market_cap": mcap}
+            return sym, {
+                "pe": info.get("trailingPE"),
+                "market_cap": info.get("marketCap"),
+                "sector": info.get("sector"),
+            }
         except Exception:  # noqa: BLE001
-            return sym, {"pe": None, "market_cap": None}
+            return sym, {"pe": None, "market_cap": None, "sector": None}
 
     out = {}
     with ThreadPoolExecutor(max_workers=8) as ex:

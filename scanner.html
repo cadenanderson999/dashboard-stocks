@@ -34,7 +34,7 @@
     <section class="controls">
       <input id="search" type="search" placeholder="Search ticker…"
              autocomplete="off" aria-label="Search ticker" />
-      <select id="exchange-filter" aria-label="Filter by exchange"></select>
+      <select id="sector-filter" aria-label="Filter by sector"></select>
       <button id="rvol-sort" class="chip" title="Sort by RVOL ascending / descending">
         RVOL ↓ Desc
       </button>
@@ -47,12 +47,20 @@
         <thead>
           <tr>
             <th class="sortable" data-key="symbol">Ticker</th>
-            <th class="sortable" data-key="exchange">Exchange</th>
             <th class="sortable num" data-key="price">Price</th>
             <th class="sortable num" data-key="change_pct">Day %</th>
-            <th class="sortable num" data-key="volume">Volume</th>
-            <th class="sortable num" data-key="avg_volume">Avg Vol (50d)</th>
-            <th class="sortable num" data-key="rvol">RVOL</th>
+            <th class="sortable num" data-key="market_cap">Mkt Cap</th>
+            <th class="sortable num" data-key="pe" title="Trailing P/E">P/E</th>
+            <th class="sortable num" data-key="ema50">EMA 50</th>
+            <th class="sortable num" data-key="ema200">EMA 200</th>
+            <th class="sortable" data-key="trend">Trend</th>
+            <th class="sortable num" data-key="rsi">RSI</th>
+            <th class="sortable" data-key="momentum">Momentum</th>
+            <th class="sortable num" data-key="rvol_mean" title="Mean RVOL over the last 30 trading days">RVOL 30d</th>
+            <th class="sortable num" data-key="rvol_high_days" title="Days in the last 30 with volume above 2× its 50-day average">Surge Days</th>
+            <th class="sortable num" data-key="rvol_today" title="Today's volume vs. its 50-day average">RVOL Today</th>
+            <th class="sortable" data-key="sector">Sector</th>
+            <th class="sortable" data-key="score">Rating</th>
           </tr>
         </thead>
         <tbody id="scan-body"><!-- filled by JS --></tbody>

@@ -57,7 +57,14 @@ filters (which compose with search, rating, and sorting).
 
 The **RVOL Scanner** page (`scanner.html`) is a market-wide scan, separate from
 the curated dashboard. It lists **liquid NYSE + Nasdaq common stocks trading at
-more than 2× their normal volume** (today's volume ÷ trailing 50-day average).
+more than 2× their normal volume** (today's volume ÷ trailing 50-day average),
+and shows the **same full signal set as the Signals page** for each hit (price,
+market cap, P/E, EMAs, trend, RSI, momentum, RVOL 30d, surge days, today's RVOL,
+sector, and Buy/Sell rating).
+
+It runs in two passes: a fast volume-only scan finds the RVOL hits, then the top
+`MAX_RESULTS` (by today's RVOL) are enriched with full history + fundamentals so
+the heavier work only touches the names that matter.
 
 - **Symbol source:** the full, free [Nasdaq Trader symbol
   directory](https://ftp.nasdaqtrader.com/SymbolDirectory/) (`nasdaqlisted.txt` +

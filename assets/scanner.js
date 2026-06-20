@@ -2,11 +2,20 @@
 
 let STOCKS = [];
 let searchTerm = "";
-let filterExchange = "all";
-let sortKey = "rvol";
+let filterSector = "all";
+let sortKey = "rvol_today";
 let sortDir = "desc";
 
-const TEXT_KEYS = ["symbol", "exchange"];
+const TEXT_KEYS = ["symbol", "trend", "momentum", "sector"];
+
+const RATING_CLASS = {
+  "Strong Buy": "pill-strong-buy",
+  Buy: "pill-buy",
+  Hold: "pill-hold",
+  Sell: "pill-sell",
+  "Strong Sell": "pill-strong-sell",
+  "No Data": "pill-no-data",
+};
 
 async function load() {
   try {
@@ -15,7 +24,7 @@ async function load() {
     const data = await res.json();
     STOCKS = data.stocks || [];
 
-    populateExchangeFilter(STOCKS);
+    populateSectorFilter(STOCKS);
 
     if (data.is_sample) {
       document.getElementById("sample-banner").classList.remove("hidden");
@@ -27,7 +36,7 @@ async function load() {
     render();
   } catch (err) {
     document.getElementById("scan-body").innerHTML =
-      `<tr><td colspan="7" class="empty">Could not load data: ${err.message}</td></tr>`;
+      `<tr><td colspan="15" class="empty">Could not load data: ${err.message}</td></tr>`;
   }
 }
 
@@ -35,13 +44,17 @@ function fmt(n, digits = 2) {
   return n === null || n === undefined ? "—" : Number(n).toFixed(digits);
 }
 
-function fmtVolume(n) {
+function fmtMarketCap(n) {
   if (n === null || n === undefined) return "—";
   const a = Math.abs(n);
-  if (a >= 1e9) return (n / 1e9).toFixed(2) + "B";
-  if (a >= 1e6) return (n / 1e6).toFixed(2) + "M";
-  if (a >= 1e3) return (n / 1e3).toFixed(1) + "K";
-  return String(n);
+  if (a >= 1e12) return "$" + (n / 1e12).toFixed(2) + "T";
+  if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+  if (a >= 1e6) return "$" + (n / 1e6).toFixed(1) + "M";
+  return "$" + Number(n).toFixed(0);
+}
+
+function pill(rating) {
+  return `<span class="pill ${RATING_CLASS[rating] || "pill-no-data"}">${rating}</span>`;
 }
 
 function compare(a, b) {
@@ -58,11 +71,11 @@ function compare(a, b) {
   return 0;
 }
 
-function populateExchangeFilter(stocks) {
-  const exchanges = [...new Set(stocks.map((s) => s.exchange).filter(Boolean))].sort();
-  document.getElementById("exchange-filter").innerHTML =
-    `<option value="all">All exchanges</option>` +
-    exchanges.map((e) => `<option value="${e}">${e}</option>`).join("");
+function populateSectorFilter(stocks) {
+  const sectors = [...new Set(stocks.map((s) => s.sector).filter(Boolean))].sort();
+  document.getElementById("sector-filter").innerHTML =
+    `<option value="all">All sectors</option>` +
+    sectors.map((s) => `<option value="${s}">${s}</option>`).join("");
 }
 
 function render() {
@@ -72,15 +85,14 @@ function render() {
       !term ||
       s.symbol.toLowerCase().includes(term) ||
       (s.name || "").toLowerCase().includes(term);
-    const matchesExchange = filterExchange === "all" || s.exchange === filterExchange;
-    return matchesSearch && matchesExchange;
+    const matchesSector = filterSector === "all" || s.sector === filterSector;
+    return matchesSearch && matchesSector;
   });
 
   rows.sort(compare);
 
-  const count = document.getElementById("result-count");
-  count.textContent = `Showing ${rows.length} of ${STOCKS.length} stocks above RVOL 2.0`;
-
+  document.getElementById("result-count").textContent =
+    `Showing ${rows.length} of ${STOCKS.length} stocks above RVOL 2.0`;
   document.getElementById("empty-state").classList.toggle("hidden", rows.length > 0);
 
   document.getElementById("scan-body").innerHTML = rows
@@ -89,17 +101,37 @@ function render() {
       const chgCls = chg > 0 ? "pos" : chg < 0 ? "neg" : "";
       const chgStr = chg === null || chg === undefined
         ? "—" : `${chg > 0 ? "+" : ""}${fmt(chg)}%`;
-      // Stronger highlight the higher the RVOL.
-      const rvolCls = s.rvol >= 4 ? "rvol-high" : s.rvol >= 3 ? "rvol-mid" : "";
+      const trendCls = s.trend === "Bullish" ? "trend-bullish"
+        : s.trend === "Bearish" ? "trend-bearish" : "";
+      const momCls = s.momentum === "Oversold" ? "mom-oversold"
+        : s.momentum === "Overbought" ? "mom-overbought" : "mom-neutral";
+      const rvolCls = s.rvol_mean >= 1.5 ? "rvol-high"
+        : s.rvol_mean >= 1.15 ? "rvol-mid" : "";
+      const surgeCls = s.rvol_high_days > 0 ? "rvol-high" : "";
+      const surgeStr = s.rvol_high_days === null || s.rvol_high_days === undefined
+        ? "—" : s.rvol_high_days;
+      const todayCls = s.rvol_today >= 4 ? "rvol-high" : s.rvol_today >= 3 ? "rvol-mid" : "";
+      const badges = (s.lists || [])
+        .map((l) => `<span class="badge badge-${l === "S&P 500" ? "sp" : "rh"}">` +
+          `${l === "S&P 500" ? "S&P" : "RH"}</span>`)
+        .join("");
       return `
         <tr>
-          <td class="ticker">${s.symbol}<span class="name">${s.name || ""}</span></td>
-          <td class="sector-cell">${s.exchange || "—"}</td>
+          <td class="ticker">${s.symbol}${badges}<span class="name">${s.name || ""}</span></td>
           <td class="num">$${fmt(s.price)}</td>
           <td class="num ${chgCls}">${chgStr}</td>
-          <td class="num">${fmtVolume(s.volume)}</td>
-          <td class="num">${fmtVolume(s.avg_volume)}</td>
-          <td class="num ${rvolCls}">${fmt(s.rvol)}×</td>
+          <td class="num">${fmtMarketCap(s.market_cap)}</td>
+          <td class="num">${fmt(s.pe, 1)}</td>
+          <td class="num">${fmt(s.ema50)}</td>
+          <td class="num">${fmt(s.ema200)}</td>
+          <td class="${trendCls}">${s.trend}</td>
+          <td class="num">${fmt(s.rsi, 1)}</td>
+          <td class="${momCls}">${s.momentum}</td>
+          <td class="num ${rvolCls}">${fmt(s.rvol_mean)}×</td>
+          <td class="num ${surgeCls}">${surgeStr}</td>
+          <td class="num ${todayCls}">${fmt(s.rvol_today)}×</td>
+          <td class="sector-cell">${s.sector || "—"}</td>
+          <td>${pill(s.rating)}<span class="reason">${s.reason || ""}</span></td>
         </tr>`;
     })
     .join("");
@@ -117,9 +149,9 @@ function updateSortHeaders() {
   const btn = document.getElementById("rvol-sort");
   if (btn) {
     btn.textContent =
-      sortKey !== "rvol" ? "Sort by RVOL"
+      sortKey !== "rvol_today" ? "Sort by RVOL"
         : sortDir === "asc" ? "RVOL ↑ Asc" : "RVOL ↓ Desc";
-    btn.classList.toggle("active", sortKey === "rvol");
+    btn.classList.toggle("active", sortKey === "rvol_today");
   }
 }
 
@@ -128,15 +160,15 @@ document.getElementById("search").addEventListener("input", (e) => {
   render();
 });
 
-document.getElementById("exchange-filter").addEventListener("change", (e) => {
-  filterExchange = e.target.value;
+document.getElementById("sector-filter").addEventListener("change", (e) => {
+  filterSector = e.target.value;
   render();
 });
 
-// Dedicated RVOL ascending/descending toggle.
+// Dedicated RVOL (today) ascending/descending toggle.
 document.getElementById("rvol-sort").addEventListener("click", () => {
-  if (sortKey !== "rvol") {
-    sortKey = "rvol";
+  if (sortKey !== "rvol_today") {
+    sortKey = "rvol_today";
     sortDir = "desc";
   } else {
     sortDir = sortDir === "desc" ? "asc" : "desc";
