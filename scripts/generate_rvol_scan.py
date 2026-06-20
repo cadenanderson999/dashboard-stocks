@@ -33,7 +33,7 @@ SCAN_PERIOD = "3mo"          # enough history for a 50-day average + today
 SCAN_CHUNK = 250             # tickers per batched download
 RVOL_THRESHOLD = 2.0         # surface names trading above this RVOL
 MIN_PRICE = 1.0              # liquidity filter: ignore sub-$1 names
-MIN_AVG_VOL = 1_000_000      # liquidity filter: >= 1M avg daily shares
+MIN_AVG_VOL = 50_000         # liquidity filter: >= 50k avg daily shares
 
 NASDAQ_DIR = "https://ftp.nasdaqtrader.com/SymbolDirectory/"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) dashboard-stocks/1.0"

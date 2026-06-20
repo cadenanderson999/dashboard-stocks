@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-06-20T02:48:58.866512+00:00",
+  "generated_at": "2026-06-20T02:52:52.378772+00:00",
   "is_sample": true,
   "params": {
     "rvol_threshold": 2.0,
     "avg_window": 50,
     "min_price": 1.0,
-    "min_avg_volume": 1000000,
+    "min_avg_volume": 50000,
     "timeframe": "1d"
   },
   "count": 45,

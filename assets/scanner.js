@@ -114,6 +114,13 @@ function updateSortHeaders() {
       th.classList.add(sortDir === "asc" ? "sorted-asc" : "sorted-desc");
     }
   });
+  const btn = document.getElementById("rvol-sort");
+  if (btn) {
+    btn.textContent =
+      sortKey !== "rvol" ? "Sort by RVOL"
+        : sortDir === "asc" ? "RVOL ↑ Asc" : "RVOL ↓ Desc";
+    btn.classList.toggle("active", sortKey === "rvol");
+  }
 }
 
 document.getElementById("search").addEventListener("input", (e) => {
@@ -123,6 +130,17 @@ document.getElementById("search").addEventListener("input", (e) => {
 
 document.getElementById("exchange-filter").addEventListener("change", (e) => {
   filterExchange = e.target.value;
+  render();
+});
+
+// Dedicated RVOL ascending/descending toggle.
+document.getElementById("rvol-sort").addEventListener("click", () => {
+  if (sortKey !== "rvol") {
+    sortKey = "rvol";
+    sortDir = "desc";
+  } else {
+    sortDir = sortDir === "desc" ? "asc" : "desc";
+  }
   render();
 });
 
