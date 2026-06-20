@@ -106,6 +106,15 @@ The header and the dropdown stay in sync. The table also includes **Market Cap**
 and trailing **P/E** for each ticker (fetched best-effort from Yahoo Finance;
 tickers with no earnings show “—” for P/E).
 
+### Numeric range filters
+
+Both pages have a **Filters** button that opens a panel with a **min / max** for
+every numeric column (Price, Day %, Market Cap, P/E, EMA 50/200, RSI, RVOL 30d,
+Surge Days — plus Today's RVOL on the Scanner). Filters apply live and stack, and
+the button shows a count of how many are active. Inputs are metric-aware: RSI is
+bounded 0–100, Surge Days 0–30, and **Market Cap accepts shorthand like `1M`,
+`2.5B`, or `3T`**. Shared implementation lives in `assets/filters.js`.
+
 ---
 
 ## Project structure

@@ -5,6 +5,7 @@ let searchTerm = "";
 let filterSector = "all";
 let sortKey = "rvol_today";
 let sortDir = "desc";
+let FILTER = null;    // numeric range-filter panel (assigned at the bottom)
 
 const TEXT_KEYS = ["symbol", "trend", "momentum", "sector"];
 
@@ -86,7 +87,8 @@ function render() {
       s.symbol.toLowerCase().includes(term) ||
       (s.name || "").toLowerCase().includes(term);
     const matchesSector = filterSector === "all" || s.sector === filterSector;
-    return matchesSearch && matchesSector;
+    const matchesRanges = !FILTER || FILTER.passes(s);
+    return matchesSearch && matchesSector && matchesRanges;
   });
 
   rows.sort(compare);
@@ -187,6 +189,14 @@ document.querySelectorAll("th.sortable").forEach((th) => {
     }
     render();
   });
+});
+
+FILTER = RangeFilters.create({
+  button: document.getElementById("filter-btn"),
+  panel: document.getElementById("filter-panel"),
+  keys: ["price", "change_pct", "market_cap", "pe", "ema50", "ema200",
+    "rsi", "rvol_mean", "rvol_high_days", "rvol_today"],
+  onChange: render,
 });
 
 load();

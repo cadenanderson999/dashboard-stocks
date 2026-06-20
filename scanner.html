@@ -35,6 +35,10 @@
       <input id="search" type="search" placeholder="Search ticker…"
              autocomplete="off" aria-label="Search ticker" />
       <select id="sector-filter" aria-label="Filter by sector"></select>
+      <div class="filter-menu">
+        <button id="filter-btn" class="chip" aria-haspopup="true">Filters</button>
+        <div id="filter-panel" class="filter-panel hidden"><!-- built by JS --></div>
+      </div>
       <button id="rvol-sort" class="chip" title="Sort by RVOL ascending / descending">
         RVOL ↓ Desc
       </button>
@@ -81,6 +85,7 @@
     </p>
   </footer>
 
+  <script src="assets/filters.js"></script>
   <script src="assets/scanner.js"></script>
 </body>
 </html>

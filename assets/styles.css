@@ -106,6 +106,60 @@ html, body {
 
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* Numeric range-filter dropdown panel */
+.filter-menu { position: relative; }
+.filter-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  width: min(340px, 92vw);
+  max-height: 64vh;
+  overflow-y: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+.filter-head {
+  display: grid;
+  grid-template-columns: 1fr 84px 84px;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.filter-head span:not(:first-child) { text-align: center; }
+.filter-row {
+  display: grid;
+  grid-template-columns: 1fr 84px 84px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.filter-row label { color: var(--text); font-size: 0.82rem; }
+.filter-row input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  outline: none;
+}
+.filter-row input:focus { border-color: var(--accent); }
+.panel-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 .sort-control { display: flex; align-items: center; gap: 8px; }
 .sort-control label { color: var(--muted); font-size: 0.85rem; }
 #sort-key {

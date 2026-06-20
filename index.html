@@ -30,6 +30,10 @@
              autocomplete="off" aria-label="Search ticker" />
       <select id="universe-filter" aria-label="Filter by list"></select>
       <select id="sector-filter" aria-label="Filter by sector"></select>
+      <div class="filter-menu">
+        <button id="filter-btn" class="chip" aria-haspopup="true">Filters</button>
+        <div id="filter-panel" class="filter-panel hidden"><!-- built by JS --></div>
+      </div>
       <div class="filters" id="rating-filters" role="group" aria-label="Filter by rating">
         <button class="chip active" data-filter="all">All</button>
         <button class="chip" data-filter="Strong Buy">Strong Buy</button>
@@ -88,6 +92,7 @@
     </p>
   </footer>
 
+  <script src="assets/filters.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>

@@ -8,6 +8,7 @@ let filterSector = "all";
 let searchTerm = "";
 let sortKey = "score";
 let sortDir = "desc"; // 'asc' | 'desc'
+let FILTER = null;    // numeric range-filter panel (assigned at the bottom)
 
 // Every numeric/string column the user can sort by (key -> label).
 // Order mirrors the table; used to build the "Sort by" dropdown.
@@ -111,7 +112,9 @@ function render() {
       !term ||
       s.symbol.toLowerCase().includes(term) ||
       (s.name || "").toLowerCase().includes(term);
-    return matchesRating && matchesUniverse && matchesSector && matchesSearch;
+    const matchesRanges = !FILTER || FILTER.passes(s);
+    return matchesRating && matchesUniverse && matchesSector &&
+      matchesSearch && matchesRanges;
   });
 
   rows.sort(compare);
@@ -286,4 +289,13 @@ document.getElementById("sort-dir").addEventListener("click", () => {
 });
 
 populateSortControls();
+
+FILTER = RangeFilters.create({
+  button: document.getElementById("filter-btn"),
+  panel: document.getElementById("filter-panel"),
+  keys: ["price", "change_pct", "market_cap", "pe", "ema50", "ema200",
+    "rsi", "rvol_mean", "rvol_high_days"],
+  onChange: render,
+});
+
 load();
