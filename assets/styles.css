@@ -34,6 +34,36 @@ html, body {
 }
 .site-header h1 { margin: 0 0 6px; font-size: 1.8rem; }
 
+.tabs { display: flex; gap: 8px; margin-top: 12px; }
+.tab {
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  transition: all 0.15s ease;
+}
+.tab:hover { color: var(--text); border-color: #36425e; }
+.tab.active { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+
+.scanner-intro { color: var(--muted); font-size: 0.95rem; margin: 20px 0 6px; }
+.scanner-intro strong { color: var(--text); }
+
+#exchange-filter {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+#exchange-filter:focus { border-color: var(--accent); }
+
 .banner {
   background: #3a2d10;
   color: #f3d27a;

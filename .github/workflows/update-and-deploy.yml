@@ -40,6 +40,10 @@ jobs:
         # back to sample data and exits non-zero only if EVERYTHING failed.
         run: python scripts/generate_data.py || echo "Data generation had issues; continuing."
 
+      - name: Generate RVOL scanner data
+        # Market-wide volume scan; tolerate flakiness so the deploy still ships.
+        run: python scripts/generate_rvol_scan.py || echo "RVOL scan had issues; continuing."
+
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:

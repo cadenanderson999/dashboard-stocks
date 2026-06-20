@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RVOL Scanner — NYSE + Nasdaq</title>
+  <meta name="description"
+        content="NYSE and Nasdaq stocks trading at more than 2× their normal volume (relative volume > 2.0)." />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>🔊 RVOL Scanner</h1>
+      <nav class="tabs">
+        <a href="index.html" class="tab">Signals</a>
+        <a href="scanner.html" class="tab active">RVOL Scanner</a>
+      </nav>
+    </div>
+  </header>
+
+  <div id="sample-banner" class="banner hidden">
+    ⚠️ Showing <strong>sample data</strong> (not real prices). Live data appears
+    once the scheduled GitHub Action runs.
+  </div>
+
+  <main class="wrap">
+    <p class="scanner-intro">
+      Liquid NYSE &amp; Nasdaq common stocks trading at more than
+      <strong>2× their normal volume</strong> — today's volume vs. the trailing
+      50-day average. Pulled from the full Nasdaq Trader symbol directory.
+    </p>
+
+    <section class="controls">
+      <input id="search" type="search" placeholder="Search ticker…"
+             autocomplete="off" aria-label="Search ticker" />
+      <select id="exchange-filter" aria-label="Filter by exchange"></select>
+    </section>
+
+    <p id="result-count" class="result-count"></p>
+
+    <div class="table-scroll">
+      <table id="scan-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-key="symbol">Ticker</th>
+            <th class="sortable" data-key="exchange">Exchange</th>
+            <th class="sortable num" data-key="price">Price</th>
+            <th class="sortable num" data-key="change_pct">Day %</th>
+            <th class="sortable num" data-key="volume">Volume</th>
+            <th class="sortable num" data-key="avg_volume">Avg Vol (50d)</th>
+            <th class="sortable num" data-key="rvol">RVOL</th>
+          </tr>
+        </thead>
+        <tbody id="scan-body"><!-- filled by JS --></tbody>
+      </table>
+    </div>
+
+    <p id="empty-state" class="empty hidden">No stocks match your search.</p>
+  </main>
+
+  <footer class="site-footer wrap">
+    <p>
+      Last updated: <span id="updated-at">—</span> ·
+      Scanned daily from Yahoo Finance volume.
+    </p>
+    <p class="disclaimer">
+      <strong>Not financial advice.</strong> High relative volume flags unusual
+      activity — it is not a buy or sell signal on its own. Do your own research.
+    </p>
+  </footer>
+
+  <script src="assets/scanner.js"></script>
+</body>
+</html>
