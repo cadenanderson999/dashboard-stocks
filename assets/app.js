@@ -146,13 +146,9 @@ function render() {
       const surgeCls = s.rvol_high_days > 0 ? "rvol-high" : "";
       const surgeStr = s.rvol_high_days === null || s.rvol_high_days === undefined
         ? "—" : s.rvol_high_days;
-      const badges = (s.lists || [])
-        .map((l) => `<span class="badge badge-${l === "S&P 500" ? "sp" : "rh"}">` +
-          `${l === "S&P 500" ? "S&P" : "RH"}</span>`)
-        .join("");
       return `
         <tr>
-          <td class="ticker">${s.symbol}${badges}<span class="name">${s.name || ""}</span></td>
+          <td class="ticker">${s.symbol}<span class="name">${s.name || ""}</span></td>
           <td class="num">$${fmt(s.price)}</td>
           <td class="num ${chgCls}">${chgStr}</td>
           <td class="num">${fmtMarketCap(s.market_cap)}</td>

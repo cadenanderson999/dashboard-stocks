@@ -238,18 +238,6 @@ tbody tr:hover { background: var(--panel-2); }
 
 .ticker { font-weight: 700; }
 .ticker .name { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; }
-.badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 0.6rem;
-  font-weight: 700;
-  vertical-align: middle;
-  letter-spacing: 0.03em;
-}
-.badge-rh { background: rgba(224,150,46,0.16); color: #b06f15; border: 1px solid rgba(224,150,46,0.45); }
-.badge-sp { background: rgba(74,118,196,0.12); color: #3a63b0; border: 1px solid rgba(74,118,196,0.35); }
 .sector-cell { color: var(--muted); font-size: 0.82rem; }
 .result-count { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
 
