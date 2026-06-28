@@ -1,14 +1,19 @@
 :root {
-  --bg: #0b0e14;
-  --panel: #141926;
-  --panel-2: #1b2233;
-  --border: #232c40;
-  --text: #e6e9ef;
-  --muted: #8b94a7;
-  --accent: #00c805;        /* Robinhood green */
-  --red: #ff5b5b;
-  --green: #2ec27e;
-  --yellow: #e3b341;
+  /* "Buy Side Brunch" palette: warm cream, champagne amber, egg-yolk orange,
+     dark-brown text, with a brunch sage green. */
+  --bg: #faf3e4;            /* warm cream background */
+  --panel: #fffdf8;         /* card / near-white */
+  --panel-2: #f3e9d4;       /* tinted header cells / hover */
+  --border: #e7dabf;        /* warm tan border */
+  --border-hover: #d6c19a;  /* darker tan on hover */
+  --text: #33291f;          /* dark brown */
+  --muted: #927f63;         /* muted brown */
+  --accent: #e0962e;        /* champagne amber (brand) */
+  --accent-2: #df7a2b;      /* egg-yolk orange */
+  --green: #4f9d56;         /* sage green — positive / buy */
+  --green-soft: #6fb877;    /* lighter green */
+  --red: #cf5a44;           /* warm red — negative / sell */
+  --yellow: #b9851f;        /* deep gold — readable on cream */
   --radius: 12px;
   font-synthesis: none;
 }
@@ -28,7 +33,7 @@ html, body {
 .wrap { width: min(1320px, 95vw); margin: 0 auto; }
 
 .site-header {
-  background: linear-gradient(180deg, #101727 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #f7ecd3 0%, var(--bg) 100%);
   border-bottom: 1px solid var(--border);
   padding: 32px 0 24px;
 }
@@ -46,8 +51,8 @@ html, body {
   background: var(--panel);
   transition: all 0.15s ease;
 }
-.tab:hover { color: var(--text); border-color: #36425e; }
-.tab.active { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+.tab:hover { color: var(--text); border-color: var(--border-hover); }
+.tab.active { color: #2f6e34; border-color: var(--green); background: rgba(79,157,86,0.12); }
 
 .scanner-intro { color: var(--muted); font-size: 0.95rem; margin: 20px 0 6px; }
 .scanner-intro strong { color: var(--text); }
@@ -65,9 +70,9 @@ html, body {
 #exchange-filter:focus { border-color: var(--accent); }
 
 .banner {
-  background: #3a2d10;
-  color: #f3d27a;
-  border-bottom: 1px solid #5c481c;
+  background: #fdf0d2;
+  color: #8a5a12;
+  border-bottom: 1px solid #f0d79a;
   text-align: center;
   padding: 10px 16px;
   font-size: 0.9rem;
@@ -120,7 +125,7 @@ html, body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 14px 34px rgba(90, 66, 20, 0.22);
 }
 .filter-head {
   display: grid;
@@ -184,8 +189,8 @@ html, body {
   font-size: 0.85rem;
   transition: all 0.15s ease;
 }
-.chip:hover { color: var(--text); border-color: #36425e; }
-.chip.active { background: var(--panel-2); color: var(--text); border-color: var(--accent); }
+.chip:hover { color: var(--text); border-color: var(--border-hover); }
+.chip.active { background: rgba(79,157,86,0.14); color: #2f6e34; border-color: var(--green); }
 
 .summary {
   display: grid;
@@ -243,8 +248,8 @@ tbody tr:hover { background: var(--panel-2); }
   vertical-align: middle;
   letter-spacing: 0.03em;
 }
-.badge-rh { background: rgba(0,200,5,0.15); color: var(--accent); border: 1px solid #00c80544; }
-.badge-sp { background: rgba(99,140,255,0.15); color: #8fa6ff; border: 1px solid #638cff44; }
+.badge-rh { background: rgba(224,150,46,0.16); color: #b06f15; border: 1px solid rgba(224,150,46,0.45); }
+.badge-sp { background: rgba(74,118,196,0.12); color: #3a63b0; border: 1px solid rgba(74,118,196,0.35); }
 .sector-cell { color: var(--muted); font-size: 0.82rem; }
 .result-count { color: var(--muted); font-size: 0.85rem; margin: 0 0 10px; }
 
@@ -258,19 +263,19 @@ tbody tr:hover { background: var(--panel-2); }
   font-size: 0.78rem;
   font-weight: 600;
 }
-.pill-strong-buy { background: rgba(46,194,126,0.18); color: #4be0a0; border: 1px solid #2ec27e55; }
-.pill-buy        { background: rgba(46,194,126,0.10); color: #2ec27e; border: 1px solid #2ec27e33; }
-.pill-hold       { background: rgba(227,179,65,0.12); color: var(--yellow); border: 1px solid #e3b34133; }
-.pill-sell       { background: rgba(255,91,91,0.10); color: var(--red); border: 1px solid #ff5b5b33; }
-.pill-strong-sell{ background: rgba(255,91,91,0.20); color: #ff8a8a; border: 1px solid #ff5b5b55; }
+.pill-strong-buy { background: rgba(79,157,86,0.20); color: #2f7a3a; border: 1px solid rgba(79,157,86,0.55); }
+.pill-buy        { background: rgba(79,157,86,0.12); color: #3d8a46; border: 1px solid rgba(79,157,86,0.35); }
+.pill-hold       { background: rgba(224,150,46,0.16); color: #a9741a; border: 1px solid rgba(224,150,46,0.4); }
+.pill-sell       { background: rgba(207,90,68,0.12); color: #c0492f; border: 1px solid rgba(207,90,68,0.35); }
+.pill-strong-sell{ background: rgba(207,90,68,0.22); color: #b23a22; border: 1px solid rgba(207,90,68,0.55); }
 .pill-no-data    { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
 
 .trend-bullish { color: var(--green); }
 .trend-bearish { color: var(--red); }
 .rvol-mid  { color: var(--yellow); }
-.rvol-high { color: #ff8a8a; font-weight: 700; }
-.mom-oversold  { color: #4be0a0; }
-.mom-overbought{ color: #ff8a8a; }
+.rvol-high { color: var(--red); font-weight: 700; }
+.mom-oversold  { color: var(--green); }
+.mom-overbought{ color: var(--red); }
 .mom-neutral   { color: var(--muted); }
 
 td .reason {
