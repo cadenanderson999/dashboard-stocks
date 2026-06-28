@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Fried egg white -->
+  <path d="M16 30 C12 18 27 11 35 16 C43 9 57 16 52 28 C61 33 56 47 46 46
+           C44 57 27 59 23 48 C11 50 9 36 16 30 Z"
+        fill="#fffdf8" stroke="#33291f" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- Yolk -->
+  <circle cx="33" cy="33" r="11.5" fill="#e8a33d" stroke="#df7a2b" stroke-width="2"/>
+  <!-- Upward chart line + arrowhead inside the yolk -->
+  <polyline points="27,38 31,34 34,36 39,29"
+            fill="none" stroke="#33291f" stroke-width="2.6"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="34.5,29 39,29 39,33.5"
+            fill="none" stroke="#33291f" stroke-width="2.6"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
