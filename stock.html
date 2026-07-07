@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock — Buy Side Signals</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1><a href="index.html" class="home-link">Buy Side Signals</a></h1>
+      <nav class="tabs">
+        <a href="index.html" class="tab">Signals</a>
+        <a href="scanner.html" class="tab">Volume Screener</a>
+      </nav>
+    </div>
+  </header>
+
+  <div id="sample-banner" class="banner hidden">
+    ⚠️ Showing <strong>sample data</strong> (not real prices). Live data appears
+    once the scheduled GitHub Action runs.
+  </div>
+
+  <main class="wrap" id="stock-main">
+    <p class="back"><a href="javascript:history.back()">← Back</a></p>
+    <div id="stock-content"><p class="empty">Loading…</p></div>
+  </main>
+
+  <footer class="site-footer wrap">
+    <p>Data from Yahoo Finance · <span id="updated-at">—</span></p>
+    <p class="disclaimer">
+      <strong>Not financial advice.</strong> Mechanical signals from technical
+      indicators, for educational purposes only. Do your own research.
+    </p>
+  </footer>
+
+  <script src="assets/stock.js"></script>
+</body>
+</html>

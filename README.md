@@ -66,6 +66,15 @@ It runs in two passes: a fast volume-only scan finds the RVOL hits, then the top
 `MAX_RESULTS` (by today's RVOL) are enriched with full history + fundamentals so
 the heavier work only touches the names that matter.
 
+## Per-stock detail page
+
+Clicking any ticker opens `stock.html?symbol=XXX`, a detail page with the full
+signal set plus extended fundamentals: a recent price chart, day/52-week ranges,
+open/previous close, forward P/E, price-to-book, EPS, beta, dividend, average
+volumes, shares outstanding, sector/industry, and a website link. These extras
+are generated into `data/details.json` (keyed by symbol) by `generate_data.py`
+from yfinance `.info`, alongside the last ~120 daily closes for the chart.
+
 - **Symbol source:** the full, free [Nasdaq Trader symbol
   directory](https://ftp.nasdaqtrader.com/SymbolDirectory/) (`nasdaqlisted.txt` +
   `otherlisted.txt`), filtered to common stocks (no ETFs / test issues).
@@ -122,17 +131,21 @@ bounded 0–100, Surge Days 0–30, and **Market Cap accepts shorthand like `1M`
 ```
 dashboard-stocks/
 ├── index.html                 # the dashboard page (Signals tab)
-├── scanner.html               # the RVOL Scanner page
+├── scanner.html               # the Volume Screener page
+├── stock.html                 # per-stock detail page (?symbol=XXX)
 ├── assets/
 │   ├── styles.css             # styling (shared)
+│   ├── filters.js             # shared numeric range-filter panel
 │   ├── app.js                 # dashboard: loads data/stocks.json
-│   └── scanner.js             # scanner: loads data/rvol_scan.json
+│   ├── scanner.js             # screener: loads data/rvol_scan.json
+│   └── stock.js               # detail page: loads data/details.json
 ├── data/
 │   ├── stocks.json            # generated indicators + ratings
-│   └── rvol_scan.json         # generated RVOL > 2.0 scan results
+│   ├── rvol_scan.json         # generated RVOL > 2.0 scan results
+│   └── details.json           # extended per-stock fundamentals + closes
 ├── scripts/
 │   ├── tickers.py             # Robinhood list + S&P 500 fallback
-│   ├── generate_data.py       # fetches prices, computes signals
+│   ├── generate_data.py       # fetches prices, computes signals + details
 │   └── generate_rvol_scan.py  # market-wide RVOL scan
 ├── requirements.txt
 └── .github/workflows/

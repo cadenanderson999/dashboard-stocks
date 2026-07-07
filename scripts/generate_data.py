@@ -66,6 +66,11 @@ LOOKBACK = "2y"
 OUTPUT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "data", "stocks.json"
 )
+DETAILS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "details.json"
+)
+# How many recent daily closes to store per stock (for the detail-page chart).
+DETAIL_CLOSES = 120
 
 
 # --------------------------------------------------------------------------- #
@@ -271,17 +276,29 @@ def build_universe(live=True):
     return universe
 
 
-def fetch_fundamentals(symbols):
-    """Best-effort P/E + market cap per ticker via yfinance (threaded).
+# Extra .info fields kept for the per-stock detail page.
+INFO_KEYS = [
+    "longName", "shortName", "industry", "website", "country",
+    "previousClose", "open", "dayLow", "dayHigh",
+    "fiftyTwoWeekLow", "fiftyTwoWeekHigh",
+    "forwardPE", "priceToBook", "trailingEps", "beta",
+    "dividendRate", "dividendYield",
+    "averageVolume", "averageVolume10days", "sharesOutstanding",
+]
 
-    Returns ``{symbol: {"pe": float|None, "market_cap": int|None}}``. Any ticker
-    that fails simply gets ``None`` values -- fundamentals never block the
+
+def fetch_fundamentals(symbols):
+    """Best-effort fundamentals per ticker via yfinance (threaded).
+
+    Returns ``{symbol: {"pe", "market_cap", "sector", "info": {...}}}`` where
+    ``info`` is a subset of yfinance's ``.info`` used by the detail page. Any
+    ticker that fails simply gets ``None`` values -- fundamentals never block the
     technical ratings, which come from the (more reliable) price download.
     """
     import yfinance as yf  # lazy import
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    print(f"Fetching fundamentals (P/E, market cap) for {len(symbols)} tickers...")
+    print(f"Fetching fundamentals for {len(symbols)} tickers...")
 
     def one(sym):
         try:
@@ -290,9 +307,10 @@ def fetch_fundamentals(symbols):
                 "pe": info.get("trailingPE"),
                 "market_cap": info.get("marketCap"),
                 "sector": info.get("sector"),
+                "info": {k: info.get(k) for k in INFO_KEYS},
             }
         except Exception:  # noqa: BLE001
-            return sym, {"pe": None, "market_cap": None, "sector": None}
+            return sym, {"pe": None, "market_cap": None, "sector": None, "info": {}}
 
     out = {}
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -341,6 +359,40 @@ def build_record(symbol, closes, volumes=None, name=None, pe=None,
     }
 
 
+def build_detail(symbol, closes, info):
+    """Extended per-stock fundamentals + recent closes for the detail page."""
+    info = info or {}
+
+    def num(key, n=2):
+        v = info.get(key)
+        return round(v, n) if isinstance(v, (int, float)) and not math.isnan(v) else None
+
+    def ival(key):
+        v = info.get(key)
+        return int(v) if isinstance(v, (int, float)) and not math.isnan(v) else None
+
+    return {
+        "industry": info.get("industry"),
+        "website": info.get("website"),
+        "country": info.get("country"),
+        "previous_close": num("previousClose"),
+        "open": num("open"),
+        "day_low": num("dayLow"),
+        "day_high": num("dayHigh"),
+        "week52_low": num("fiftyTwoWeekLow"),
+        "week52_high": num("fiftyTwoWeekHigh"),
+        "forward_pe": num("forwardPE", 1),
+        "price_to_book": num("priceToBook", 2),
+        "eps": num("trailingEps", 2),
+        "beta": num("beta", 2),
+        "dividend_rate": num("dividendRate", 2),
+        "avg_volume": ival("averageVolume"),
+        "avg_volume_10d": ival("averageVolume10days"),
+        "shares_outstanding": ival("sharesOutstanding"),
+        "closes": [round(c, 2) for c in closes[-DETAIL_CLOSES:]],
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Data acquisition
 # --------------------------------------------------------------------------- #
@@ -385,6 +437,7 @@ def fetch_live():
     fundamentals = fetch_fundamentals(symbols)
 
     records = []
+    details = {}
     skipped = 0
     for symbol in symbols:
         closes, volumes = prices.get(symbol, ([], []))
@@ -400,9 +453,10 @@ def fetch_live():
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=meta.get("sector"), lists=meta.get("lists"),
         ))
+        details[symbol] = build_detail(symbol, closes, f.get("info"))
 
     print(f"Built {len(records)} records ({skipped} tickers had no usable data).")
-    return records
+    return records, details
 
 
 def generate_sample():
@@ -412,6 +466,7 @@ def generate_sample():
     # Use the static universe so sample data mirrors the real shape/size.
     universe = build_universe(live=False)
     records = []
+    details = {}
     for symbol, meta in universe.items():
         base = rng.uniform(15, 500)
         base_vol = rng.uniform(1e6, 5e7)
@@ -436,7 +491,21 @@ def generate_sample():
             pe=pe, market_cap=market_cap,
             sector=meta.get("sector"), lists=meta.get("lists"),
         ))
-    return records
+        last = closes[-1]
+        info = {
+            "industry": meta.get("sector"),
+            "website": None, "country": "United States",
+            "previousClose": closes[-2], "open": closes[-2] * rng.uniform(0.99, 1.01),
+            "dayLow": last * 0.98, "dayHigh": last * 1.02,
+            "fiftyTwoWeekLow": min(closes[-252:]), "fiftyTwoWeekHigh": max(closes[-252:]),
+            "forwardPE": None if pe is None else pe * rng.uniform(0.8, 1.1),
+            "priceToBook": rng.uniform(1, 12), "trailingEps": last / (pe or 20),
+            "beta": rng.uniform(0.5, 2.0), "dividendRate": rng.choice([0, rng.uniform(0.5, 4)]),
+            "averageVolume": int(base_vol), "averageVolume10days": int(base_vol * rng.uniform(0.8, 1.2)),
+            "sharesOutstanding": int(market_cap / last),
+        }
+        details[symbol] = build_detail(symbol, closes, info)
+    return records, details
 
 
 # --------------------------------------------------------------------------- #
@@ -475,6 +544,19 @@ def write_output(records, is_sample):
           f"(sample={is_sample})")
 
 
+def write_details(details, is_sample):
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "is_sample": is_sample,
+        "count": len(details),
+        "stocks": details,
+    }
+    os.makedirs(os.path.dirname(DETAILS_PATH), exist_ok=True)
+    with open(DETAILS_PATH, "w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"Wrote {len(details)} detail entries to {os.path.relpath(DETAILS_PATH)}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="store_true",
@@ -482,22 +564,27 @@ def main():
     args = parser.parse_args()
 
     if args.sample:
-        write_output(generate_sample(), is_sample=True)
+        records, details = generate_sample()
+        write_output(records, is_sample=True)
+        write_details(details, is_sample=True)
         return 0
 
     try:
-        records = fetch_live()
+        records, details = fetch_live()
     except Exception as exc:  # noqa: BLE001
         print(f"Live fetch raised: {exc}", file=sys.stderr)
-        records = []
+        records, details = [], {}
 
     if not records:
         print("Live fetch produced no data — falling back to sample.",
               file=sys.stderr)
-        write_output(generate_sample(), is_sample=True)
+        records, details = generate_sample()
+        write_output(records, is_sample=True)
+        write_details(details, is_sample=True)
         return 1
 
     write_output(records, is_sample=False)
+    write_details(details, is_sample=False)
     return 0
 
 

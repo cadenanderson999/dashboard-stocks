@@ -115,7 +115,7 @@ function render() {
       const todayCls = s.rvol_today >= 4 ? "rvol-high" : s.rvol_today >= 3 ? "rvol-mid" : "";
       return `
         <tr>
-          <td class="ticker">${s.symbol}<span class="name">${s.name || ""}</span></td>
+          <td class="ticker"><a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
           <td class="num">$${fmt(s.price)}</td>
           <td class="num ${chgCls}">${chgStr}</td>
           <td class="num">${fmtMarketCap(s.market_cap)}</td>
