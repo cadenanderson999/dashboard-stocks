@@ -284,7 +284,50 @@ INFO_KEYS = [
     "forwardPE", "priceToBook", "trailingEps", "beta",
     "dividendRate", "dividendYield",
     "averageVolume", "averageVolume10days", "sharesOutstanding",
+    # Analyst price targets + recommendation.
+    "targetMeanPrice", "targetHighPrice", "targetLowPrice", "targetMedianPrice",
+    "numberOfAnalystOpinions", "recommendationKey", "recommendationMean",
+    # Next earnings date (unix timestamps).
+    "earningsTimestamp", "earningsTimestampStart",
 ]
+
+# How many recent quarters of earnings history to store.
+EARNINGS_QUARTERS = 6
+
+
+def extract_earnings(ticker):
+    """Recent quarterly revenue / net income / EPS from the income statement.
+
+    Returns a list (newest first) of ``{period, revenue, net_income, eps}``.
+    Best-effort: returns ``[]`` on any failure.
+    """
+    try:
+        df = ticker.quarterly_income_stmt
+    except Exception:  # noqa: BLE001
+        return []
+    if df is None or getattr(df, "empty", True):
+        return []
+
+    def cell(col, *fields):
+        for field in fields:
+            try:
+                v = df.loc[field, col]
+            except Exception:  # noqa: BLE001
+                continue
+            if v is not None and v == v:  # not None, not NaN
+                return float(v)
+        return None
+
+    rows = []
+    for col in list(df.columns)[:EARNINGS_QUARTERS]:
+        period = col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col)
+        rows.append({
+            "period": period,
+            "revenue": cell(col, "Total Revenue", "Operating Revenue"),
+            "net_income": cell(col, "Net Income", "Net Income Common Stockholders"),
+            "eps": cell(col, "Diluted EPS", "Basic EPS"),
+        })
+    return rows
 
 
 def fetch_fundamentals(symbols):
@@ -302,15 +345,18 @@ def fetch_fundamentals(symbols):
 
     def one(sym):
         try:
-            info = yf.Ticker(sym).info or {}
+            tk = yf.Ticker(sym)
+            info = tk.info or {}
             return sym, {
                 "pe": info.get("trailingPE"),
                 "market_cap": info.get("marketCap"),
                 "sector": info.get("sector"),
                 "info": {k: info.get(k) for k in INFO_KEYS},
+                "earnings": extract_earnings(tk),
             }
         except Exception:  # noqa: BLE001
-            return sym, {"pe": None, "market_cap": None, "sector": None, "info": {}}
+            return sym, {"pe": None, "market_cap": None, "sector": None,
+                         "info": {}, "earnings": []}
 
     out = {}
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -359,7 +405,17 @@ def build_record(symbol, closes, volumes=None, name=None, pe=None,
     }
 
 
-def build_detail(symbol, closes, info):
+def _ts_to_date(ts):
+    """Unix timestamp -> 'YYYY-MM-DD', or None."""
+    if not isinstance(ts, (int, float)) or math.isnan(ts):
+        return None
+    try:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def build_detail(symbol, closes, info, earnings=None):
     """Extended per-stock fundamentals + recent closes for the detail page."""
     info = info or {}
 
@@ -370,6 +426,10 @@ def build_detail(symbol, closes, info):
     def ival(key):
         v = info.get(key)
         return int(v) if isinstance(v, (int, float)) and not math.isnan(v) else None
+
+    next_earnings = _ts_to_date(
+        info.get("earningsTimestampStart") or info.get("earningsTimestamp")
+    )
 
     return {
         "industry": info.get("industry"),
@@ -389,6 +449,17 @@ def build_detail(symbol, closes, info):
         "avg_volume": ival("averageVolume"),
         "avg_volume_10d": ival("averageVolume10days"),
         "shares_outstanding": ival("sharesOutstanding"),
+        "next_earnings": next_earnings,
+        "analyst": {
+            "target_mean": num("targetMeanPrice"),
+            "target_high": num("targetHighPrice"),
+            "target_low": num("targetLowPrice"),
+            "target_median": num("targetMedianPrice"),
+            "num_analysts": ival("numberOfAnalystOpinions"),
+            "recommendation": info.get("recommendationKey"),
+            "recommendation_mean": num("recommendationMean", 2),
+        },
+        "earnings": earnings or [],
         "closes": [round(c, 2) for c in closes[-DETAIL_CLOSES:]],
     }
 
@@ -453,7 +524,8 @@ def fetch_live():
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=meta.get("sector"), lists=meta.get("lists"),
         ))
-        details[symbol] = build_detail(symbol, closes, f.get("info"))
+        details[symbol] = build_detail(
+            symbol, closes, f.get("info"), f.get("earnings"))
 
     print(f"Built {len(records)} records ({skipped} tickers had no usable data).")
     return records, details
@@ -503,8 +575,31 @@ def generate_sample():
             "beta": rng.uniform(0.5, 2.0), "dividendRate": rng.choice([0, rng.uniform(0.5, 4)]),
             "averageVolume": int(base_vol), "averageVolume10days": int(base_vol * rng.uniform(0.8, 1.2)),
             "sharesOutstanding": int(market_cap / last),
+            # Analyst targets clustered around the current price.
+            "targetMeanPrice": last * rng.uniform(0.9, 1.3),
+            "targetHighPrice": last * rng.uniform(1.3, 1.7),
+            "targetLowPrice": last * rng.uniform(0.6, 0.9),
+            "targetMedianPrice": last * rng.uniform(0.95, 1.25),
+            "numberOfAnalystOpinions": rng.randint(4, 45),
+            "recommendationKey": rng.choice(["buy", "hold", "strong_buy", "sell"]),
+            "recommendationMean": round(rng.uniform(1.5, 3.5), 2),
+            "earningsTimestampStart": 1786000000 + rng.randint(0, 90) * 86400,
         }
-        details[symbol] = build_detail(symbol, closes, info)
+        # Synthetic quarterly earnings history (newest first).
+        shares = info["sharesOutstanding"]
+        earnings = []
+        rev = market_cap * rng.uniform(0.15, 0.5)
+        for q in range(EARNINGS_QUARTERS):
+            month = 3 * ((q + 1))
+            ni = rev * rng.uniform(0.05, 0.25)
+            earnings.append({
+                "period": f"2025-{max(1, 12 - month % 12):02d}-28",
+                "revenue": rev,
+                "net_income": ni,
+                "eps": round(ni / shares, 2) if shares else None,
+            })
+            rev *= rng.uniform(0.92, 0.99)  # older quarters slightly smaller
+        details[symbol] = build_detail(symbol, closes, info, earnings)
     return records, details
 
 

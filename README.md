@@ -71,9 +71,12 @@ the heavier work only touches the names that matter.
 Clicking any ticker opens `stock.html?symbol=XXX`, a detail page with the full
 signal set plus extended fundamentals: a recent price chart, day/52-week ranges,
 open/previous close, forward P/E, price-to-book, EPS, beta, dividend, average
-volumes, shares outstanding, sector/industry, and a website link. These extras
-are generated into `data/details.json` (keyed by symbol) by `generate_data.py`
-from yfinance `.info`, alongside the last ~120 daily closes for the chart.
+volumes, shares outstanding, sector/industry, and a website link. It also shows
+**analyst price targets** (mean/median/high/low with a range bar + recommendation),
+the **next earnings date**, and a **quarterly earnings history** table (revenue,
+net income, diluted EPS). These extras are generated into `data/details.json`
+(keyed by symbol) by `generate_data.py` from yfinance `.info` and the quarterly
+income statement, alongside the last ~120 daily closes for the chart.
 
 - **Symbol source:** the full, free [Nasdaq Trader symbol
   directory](https://ftp.nasdaqtrader.com/SymbolDirectory/) (`nasdaqlisted.txt` +

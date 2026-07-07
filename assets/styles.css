@@ -353,6 +353,47 @@ td .reason {
 .stat-l { color: var(--muted); font-size: 0.85rem; }
 .stat-v { font-weight: 600; font-size: 0.9rem; text-align: right; }
 
+/* Analyst target range bar */
+.target-bar { position: relative; height: 8px; margin: 14px 0 6px; }
+.tb-track {
+  position: absolute; top: 3px; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--red), var(--yellow), var(--green));
+  border-radius: 2px; opacity: 0.55;
+}
+.tb-mark {
+  position: absolute; top: -2px; width: 3px; height: 12px; border-radius: 2px;
+  transform: translateX(-50%);
+}
+.tb-mark.price { background: var(--text); }
+.tb-mark.mean { background: var(--accent); height: 14px; top: -3px; }
+.tb-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; }
+.tb-legend { color: var(--muted); font-size: 0.72rem; margin-top: 6px; display: flex; align-items: center; gap: 5px; }
+.tb-legend .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-left: 8px; }
+.tb-legend .dot.price { background: var(--text); margin-left: 0; }
+.tb-legend .dot.mean { background: var(--accent); }
+
+/* Earnings history */
+.earnings-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+.earnings-section h3 {
+  margin: 0 0 10px; font-size: 0.8rem; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted);
+}
+.next-earn { color: var(--accent-2); text-transform: none; letter-spacing: 0; }
+.mini-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.mini-table th {
+  text-align: left; color: var(--muted); font-weight: 600;
+  padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.mini-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.mini-table tr:last-child td { border-bottom: none; }
+.mini-table th.num, .mini-table td.num { text-align: right; }
+
 .reason-note {
   color: var(--muted);
   font-size: 0.88rem;

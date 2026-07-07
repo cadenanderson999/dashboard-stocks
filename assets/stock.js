@@ -36,6 +36,19 @@ function fmtVolume(n) {
 function pct(n, digits = 2) {
   return n === null || n === undefined ? "—" : `${n > 0 ? "+" : ""}${fmt(n, digits)}%`;
 }
+function fmtDate(str) {
+  if (!str) return "—";
+  const d = new Date(str + "T00:00:00");
+  return Number.isNaN(d.getTime())
+    ? str : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+function titleCase(s) {
+  return s ? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—";
+}
+function fmtBig(n) {
+  if (n === null || n === undefined) return "—";
+  return (n < 0 ? "-" : "") + fmtMarketCap(Math.abs(n));
+}
 
 // --- load ----------------------------------------------------------------- //
 async function fetchJson(path) {
@@ -117,6 +130,65 @@ function statCard(title, rows) {
   return `<section class="stat-card"><h3>${title}</h3>${body}</section>`;
 }
 
+function targetBar(a, price) {
+  const { target_low: lo, target_high: hi, target_mean: mean } = a;
+  if (lo == null || hi == null || hi <= lo) return "";
+  const pos = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+  const marks =
+    (price != null ? `<div class="tb-mark price" style="left:${pos(price)}%" title="Price ${fmtPrice(price)}"></div>` : "") +
+    (mean != null ? `<div class="tb-mark mean" style="left:${pos(mean)}%" title="Mean target ${fmtPrice(mean)}"></div>` : "");
+  return `
+    <div class="target-bar"><div class="tb-track"></div>${marks}</div>
+    <div class="tb-labels"><span>${fmtPrice(lo)}</span><span>${fmtPrice(hi)}</span></div>
+    <div class="tb-legend"><span class="dot price"></span>Price
+      <span class="dot mean"></span>Mean target</div>`;
+}
+
+function analystCard(a, price) {
+  a = a || {};
+  const hasAny = ["target_mean", "target_high", "target_low", "num_analysts"]
+    .some((k) => a[k] != null);
+  if (!hasAny) return statCard("Analyst targets", [["Coverage", "No data"]]);
+
+  const upside = (a.target_mean != null && price)
+    ? ((a.target_mean - price) / price) * 100 : null;
+  const rows = [
+    ["Mean target", a.target_mean != null
+      ? `${fmtPrice(a.target_mean)}${upside != null ? ` <span class="${upside >= 0 ? "pos" : "neg"}">(${pct(upside, 1)})</span>` : ""}` : "—"],
+    ["Median target", fmtPrice(a.target_median)],
+    ["High / Low", (a.target_high != null && a.target_low != null)
+      ? `${fmtPrice(a.target_high)} / ${fmtPrice(a.target_low)}` : "—"],
+    ["Recommendation", a.recommendation
+      ? `${titleCase(a.recommendation)}${a.recommendation_mean != null ? ` (${a.recommendation_mean})` : ""}` : "—"],
+    ["Analysts", a.num_analysts != null ? a.num_analysts : "—"],
+  ];
+  const body = rows.map(([l, v]) =>
+    `<div class="stat"><span class="stat-l">${l}</span><span class="stat-v">${v}</span></div>`).join("");
+  return `<section class="stat-card"><h3>Analyst targets</h3>${body}${targetBar(a, price)}</section>`;
+}
+
+function earningsSection(d) {
+  const next = d.next_earnings;
+  const hist = d.earnings || [];
+  if (!next && !hist.length) return "";
+  const rows = hist.map((e) => `
+    <tr>
+      <td>${fmtDate(e.period)}</td>
+      <td class="num">${fmtBig(e.revenue)}</td>
+      <td class="num">${fmtBig(e.net_income)}</td>
+      <td class="num">${e.eps != null ? "$" + fmt(e.eps) : "—"}</td>
+    </tr>`).join("");
+  return `
+    <section class="earnings-section">
+      <h3>Earnings${next ? ` · <span class="next-earn">Next report: ${fmtDate(next)}</span>` : ""}</h3>
+      ${hist.length ? `<div class="table-scroll"><table class="mini-table">
+        <thead><tr><th>Quarter (period end)</th><th class="num">Revenue</th>
+          <th class="num">Net income</th><th class="num">EPS (diluted)</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`
+        : `<p class="empty">No earnings history available.</p>`}
+    </section>`;
+}
+
 function render(el, s, d) {
   const chg = s.change_pct;
   const chgCls = chg > 0 ? "pos" : chg < 0 ? "neg" : "";
@@ -192,7 +264,10 @@ function render(el, s, d) {
         ["Avg volume (10d)", fmtVolume(d.avg_volume_10d)],
         ["Shares outstanding", fmtVolume(d.shares_outstanding)],
       ])}
+      ${analystCard(d.analyst, s.price)}
     </div>
+
+    ${earningsSection(d)}
 
     ${s.reason ? `<p class="reason-note"><strong>Why this rating:</strong> ${s.reason}</p>` : ""}
     ${d.website ? `<p class="reason-note"><a href="${d.website}" target="_blank" rel="noopener">${d.website}</a>${d.country ? ` · ${d.country}` : ""}</p>` : ""}
