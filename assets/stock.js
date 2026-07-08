@@ -66,15 +66,17 @@ async function load() {
     return;
   }
 
-  const [signals, scan, details] = await Promise.all([
+  const [signals, scan, details, options] = await Promise.all([
     fetchJson("data/stocks.json"),
     fetchJson("data/rvol_scan.json"),
     fetchJson("data/details.json"),
+    fetchJson("data/options.json"),
   ]);
 
   const find = (d) => d && d.stocks && d.stocks.find((s) => s.symbol === SYMBOL);
   const signal = find(signals) || find(scan);
   const detail = details && details.stocks ? details.stocks[SYMBOL] : null;
+  const opt = options && options.stocks ? options.stocks[SYMBOL] : null;
 
   const isSample =
     (signals && signals.is_sample) || (details && details.is_sample);
@@ -91,7 +93,7 @@ async function load() {
   }
 
   document.title = `${SYMBOL} — Buy Side Signals`;
-  render(el, signal || { symbol: SYMBOL }, detail || {});
+  render(el, signal || { symbol: SYMBOL }, detail || {}, opt);
 }
 
 // --- price chart (inline SVG) --------------------------------------------- //
@@ -189,7 +191,43 @@ function earningsSection(d) {
     </section>`;
 }
 
-function render(el, s, d) {
+function optionsSection(o) {
+  if (!o) return "";
+  const pcCls = o.put_call_ratio != null ? (o.put_call_ratio > 1 ? "neg" : "pos") : "";
+  const rows = (list) => (list || []).map((c) => `
+    <tr>
+      <td class="num">$${fmt(c.strike)}</td>
+      <td>${fmtDate(c.exp)}</td>
+      <td class="num">${fmtVolume(c.oi)}</td>
+      <td class="num">${c.volume != null ? fmtVolume(c.volume) : "—"}</td>
+      <td class="num">${c.last != null ? "$" + fmt(c.last) : "—"}</td>
+    </tr>`).join("");
+  const table = (title, list, cls) => `
+    <div class="opt-table">
+      <h4 class="${cls}">${title}</h4>
+      <div class="table-scroll"><table class="mini-table">
+        <thead><tr><th class="num">Strike</th><th>Expiry</th><th class="num">OI</th>
+          <th class="num">Vol</th><th class="num">Last</th></tr></thead>
+        <tbody>${rows(list) || `<tr><td colspan="5" class="empty">—</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  return `
+    <section class="options-section">
+      <h3>Options open interest
+        <span class="opt-note">· near-term (≤ ${o.horizon_days}d, ${o.expirations_used} expirations)</span></h3>
+      <div class="opt-summary">
+        <div class="opt-stat"><span class="stat-l">Call OI</span><span class="stat-v pos">${fmtVolume(o.call_oi)}</span></div>
+        <div class="opt-stat"><span class="stat-l">Put OI</span><span class="stat-v neg">${fmtVolume(o.put_oi)}</span></div>
+        <div class="opt-stat"><span class="stat-l">Put / Call ratio</span><span class="stat-v ${pcCls}">${o.put_call_ratio != null ? fmt(o.put_call_ratio) : "—"}</span></div>
+      </div>
+      <div class="opt-tables">
+        ${table("Highest-OI calls", o.top_calls, "trend-bullish")}
+        ${table("Highest-OI puts", o.top_puts, "trend-bearish")}
+      </div>
+    </section>`;
+}
+
+function render(el, s, d, opt) {
   const chg = s.change_pct;
   const chgCls = chg > 0 ? "pos" : chg < 0 ? "neg" : "";
   const ratingCls = RATING_CLASS[s.rating] || "pill-no-data";
@@ -268,6 +306,8 @@ function render(el, s, d) {
     </div>
 
     ${earningsSection(d)}
+
+    ${optionsSection(opt)}
 
     ${s.reason ? `<p class="reason-note"><strong>Why this rating:</strong> ${s.reason}</p>` : ""}
     ${d.website ? `<p class="reason-note"><a href="${d.website}" target="_blank" rel="noopener">${d.website}</a>${d.country ? ` · ${d.country}` : ""}</p>` : ""}
