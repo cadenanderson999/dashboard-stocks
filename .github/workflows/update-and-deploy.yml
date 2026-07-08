@@ -44,11 +44,6 @@ jobs:
         # Market-wide volume scan; tolerate flakiness so the deploy still ships.
         run: python scripts/generate_rvol_scan.py || echo "RVOL scan had issues; continuing."
 
-      - name: Generate options data
-        # Options open interest for RH100 + screener hits; runs after the scan
-        # so it can read its hits. Tolerate flakiness.
-        run: python scripts/generate_options.py || echo "Options fetch had issues; continuing."
-
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:

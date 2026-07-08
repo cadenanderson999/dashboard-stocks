@@ -78,14 +78,8 @@ net income, diluted EPS). These extras are generated into `data/details.json`
 (keyed by symbol) by `generate_data.py` from yfinance `.info` and the quarterly
 income statement, alongside the last ~120 daily closes for the chart.
 
-For the **Robinhood 100 + Volume Screener hits**, the page also shows an
-**options open-interest** section: total call OI, total put OI, the put/call
-ratio, and the highest-open-interest call and put contracts. It aggregates Yahoo
-option chains across near-term expirations (≤ 60 days, capped) via
-`scripts/generate_options.py` into `data/options.json`. (optioncharts.io has no
-free API; Yahoo exposes the same open-interest data.) Options are the heaviest
-pull, so they're scoped to the most-traded names — other stocks simply omit the
-section.
+Each detail page also links out to the ticker's **OptionCharts** page for the
+full options chain (open interest, put/call, etc.).
 
 - **Symbol source:** the full, free [Nasdaq Trader symbol
   directory](https://ftp.nasdaqtrader.com/SymbolDirectory/) (`nasdaqlisted.txt` +
@@ -158,8 +152,7 @@ dashboard-stocks/
 ├── scripts/
 │   ├── tickers.py             # Robinhood list + S&P 500 fallback
 │   ├── generate_data.py       # fetches prices, computes signals + details
-│   ├── generate_rvol_scan.py  # market-wide RVOL scan
-│   └── generate_options.py    # options open interest (RH100 + screener hits)
+│   └── generate_rvol_scan.py  # market-wide RVOL scan
 ├── requirements.txt
 └── .github/workflows/
     └── update-and-deploy.yml  # daily refresh + Pages deploy
