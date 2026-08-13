@@ -32,8 +32,8 @@ MIN_PRICE = 1.0
 MIN_AVG_VOL = 50_000          # basic liquidity floor
 
 SCAN_PERIOD = "4mo"           # enough for 5-day + prior-50-day windows
-SCAN_CHUNK = 250
-MAX_WORKERS = 8
+SCAN_CHUNK = 200
+MAX_WORKERS = 4               # gentle on Yahoo so market-cap lookups aren't throttled
 
 
 def weekly_rvol(volumes):
@@ -50,19 +50,18 @@ def weekly_rvol(volumes):
 
 def market_cap(sym):
     import yfinance as yf
-    tk = yf.Ticker(sym)
-    # fast_info is much lighter than .info.
-    try:
-        fi = tk.fast_info
-        mc = fi.get("market_cap") if hasattr(fi, "get") else getattr(fi, "market_cap", None)
-        if mc:
-            return float(mc)
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        return (tk.info or {}).get("marketCap")
-    except Exception:  # noqa: BLE001
-        return None
+    # fast_info is much lighter than .info; retry once on a transient/rate error.
+    for attempt in range(2):
+        try:
+            fi = yf.Ticker(sym).fast_info
+            mc = fi.get("market_cap") if hasattr(fi, "get") else getattr(fi, "market_cap", None)
+            if mc:
+                return float(mc)
+            return None
+        except Exception:  # noqa: BLE001
+            if attempt == 0:
+                time.sleep(1.5)
+    return None
 
 
 def main():

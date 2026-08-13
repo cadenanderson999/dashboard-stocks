@@ -57,12 +57,27 @@ OUTPUT_PATH = os.path.join(
 # Symbol universe (Nasdaq Trader directory)
 # --------------------------------------------------------------------------- #
 def _normalize(symbol):
-    """Yahoo-compatible ticker, or None if it's not a plain common share."""
+    """Yahoo-compatible common-stock ticker, or None if it's not one.
+
+    Drops warrants / units / rights / preferreds / when-issued and other
+    non-common instruments so the market scan stays lean.
+    """
     s = symbol.strip().upper()
-    # Skip preferreds / warrants / units / when-issued and other non-common.
-    if not s or any(c in s for c in "$ ="):
+    if not s or any(c in s for c in "$ =/^"):
         return None
-    return s.replace(".", "-")  # BRK.B -> BRK-B
+    # Dotted/dashed suffixes: keep only share classes A/B (BRK.B, BF-B);
+    # drop -WT (warrant), -UN/-U (unit), -RI (right), -P* (preferred), etc.
+    for sep in (".", "-"):
+        if sep in s:
+            base, _, suf = s.rpartition(sep)
+            if suf not in ("A", "B"):
+                return None
+            s = f"{base}-{suf}"  # Yahoo uses a dash for share classes
+            return s
+    # 5th-letter codes: W=warrant, U=unit, R=right, Q=bankruptcy -> not common.
+    if len(s) >= 5 and s[-1] in ("W", "U", "R", "Q"):
+        return None
+    return s
 
 
 def fetch_symbols():
