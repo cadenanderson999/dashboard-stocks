@@ -1,0 +1,23 @@
+name: Count watchlist candidates
+
+# Manual, on-demand diagnostic: prints how many stocks pass the daily
+# watchlist criteria (weekly RVOL + market cap). Does not change the site.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Count candidates
+        run: python scripts/select_watchlist.py
