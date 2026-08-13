@@ -322,7 +322,7 @@ td .reason {
   overflow: hidden;
 }
 .tv-chart .tradingview-widget-container,
-.tv-chart .tradingview-widget-container__widget { height: 440px; width: 100%; }
+.tv-chart .tradingview-widget-container__widget { height: 1100px; width: 100%; }
 .tradingview-widget-copyright { font-size: 0.7rem; padding: 4px 6px 0; }
 .tradingview-widget-copyright a { color: var(--muted); text-decoration: none; }
 
