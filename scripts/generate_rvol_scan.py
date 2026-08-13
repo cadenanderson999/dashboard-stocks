@@ -74,7 +74,7 @@ def fetch_symbols():
 
     def get(filename):
         req = urllib.request.Request(NASDAQ_DIR + filename, headers={"User-Agent": UA})
-        return urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "replace")
+        return urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "replace")
 
     out = {}
 
@@ -112,6 +112,28 @@ def fetch_symbols():
                 out[s] = {"name": name.strip(), "exchange": exch_name[exch]}
     except Exception as exc:  # noqa: BLE001
         print(f"otherlisted fetch failed: {exc}", file=sys.stderr)
+
+    if out:
+        print(f"Symbol universe: {len(out)} from Nasdaq Trader directory.")
+        return out
+
+    # Fallback: SEC publishes all US-listed tickers (reliable from cloud IPs).
+    # Requires a descriptive User-Agent per SEC policy.
+    try:
+        req = urllib.request.Request(
+            "https://www.sec.gov/files/company_tickers.json",
+            headers={"User-Agent": "BuySideSignals watchlist admin@buysidesignals.xyz"},
+        )
+        data = json.loads(
+            urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "replace"))
+        for row in data.values():
+            s = _normalize(str(row.get("ticker", "")))
+            if s and s not in out:
+                out[s] = {"name": str(row.get("title", "")).strip(), "exchange": ""}
+        print(f"Symbol universe: {len(out)} from SEC company_tickers "
+              "(Nasdaq Trader was unreachable).")
+    except Exception as exc:  # noqa: BLE001
+        print(f"SEC fallback fetch failed: {exc}", file=sys.stderr)
 
     return out
 
