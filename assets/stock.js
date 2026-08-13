@@ -94,30 +94,47 @@ async function load() {
   render(el, signal || { symbol: SYMBOL }, detail || {});
 }
 
-// --- price chart (inline SVG) --------------------------------------------- //
-function priceChart(closes) {
-  if (!closes || closes.length < 2) return "";
-  const w = 900, h = 240, pad = 10;
-  const min = Math.min(...closes), max = Math.max(...closes);
-  const range = (max - min) || 1;
-  const n = closes.length;
-  const x = (i) => pad + (i * (w - 2 * pad)) / (n - 1);
-  const y = (v) => pad + (1 - (v - min) / range) * (h - 2 * pad);
-  const line = closes.map((c, i) => `${x(i).toFixed(1)},${y(c).toFixed(1)}`).join(" ");
-  const up = closes[n - 1] >= closes[0];
-  const stroke = up ? "var(--green)" : "var(--red)";
-  const fill = up ? "rgba(79,157,86,0.12)" : "rgba(207,90,68,0.12)";
-  const area = `${pad},${h - pad} ${line} ${w - pad},${h - pad}`;
+// --- TradingView chart ---------------------------------------------------- //
+function tvChartMarkup() {
   return `
-    <div class="chart-wrap">
-      <div class="chart-caption">Last ${n} trading days</div>
-      <svg class="price-chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
-           role="img" aria-label="Price history for ${SYMBOL}">
-        <polyline points="${area}" fill="${fill}" stroke="none"/>
-        <polyline points="${line}" fill="none" stroke="${stroke}"
-                  stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      </svg>
+    <div class="tv-chart">
+      <div class="tradingview-widget-container" id="tv-container">
+        <div class="tradingview-widget-container__widget"></div>
+        <div class="tradingview-widget-copyright">
+          <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
+            Track all markets on TradingView</a>
+        </div>
+      </div>
     </div>`;
+}
+
+function mountTradingView(symbol) {
+  const container = document.getElementById("tv-container");
+  if (!container) return;
+  // TradingView uses dots for share classes (BRK-B -> BRK.B).
+  const tvSymbol = symbol.replace(/-/g, ".");
+  const config = {
+    autosize: true,
+    symbol: tvSymbol,
+    interval: "240",      // 4-hour candles
+    range: "1M",          // ~last month (≈3-4 weeks of 4H bars)
+    timezone: "America/New_York",
+    theme: "light",
+    style: "1",           // candles
+    locale: "en",
+    hide_side_toolbar: true,
+    allow_symbol_change: false,
+    save_image: false,
+    calendar: false,
+    support_host: "https://www.tradingview.com",
+  };
+  const script = document.createElement("script");
+  script.type = "text/javascript";
+  script.async = true;
+  script.src =
+    "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+  script.text = JSON.stringify(config);
+  container.appendChild(script);
 }
 
 // --- render --------------------------------------------------------------- //
@@ -232,7 +249,7 @@ function render(el, s, d) {
       </div>
     </div>
 
-    ${priceChart(d.closes)}
+    ${tvChartMarkup()}
 
     <div class="stat-grid">
       ${statCard("Signal", [
@@ -277,6 +294,9 @@ function render(el, s, d) {
     ${s.reason ? `<p class="reason-note"><strong>Why this rating:</strong> ${s.reason}</p>` : ""}
     ${d.website ? `<p class="reason-note"><a href="${d.website}" target="_blank" rel="noopener">${d.website}</a>${d.country ? ` · ${d.country}` : ""}</p>` : ""}
   `;
+
+  // Mount the TradingView widget into the container just rendered.
+  mountTradingView(s.symbol);
 }
 
 load();

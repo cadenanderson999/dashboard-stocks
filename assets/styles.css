@@ -313,15 +313,18 @@ td .reason {
 .stock-price { font-size: 1.9rem; font-weight: 800; }
 .stock-change { font-size: 1rem; font-weight: 600; margin: 2px 0 8px; }
 
-.chart-wrap {
+.tv-chart {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 16px 8px;
+  padding: 6px;
   margin-bottom: 20px;
+  overflow: hidden;
 }
-.chart-caption { color: var(--muted); font-size: 0.8rem; margin-bottom: 6px; }
-.price-chart { width: 100%; height: 240px; display: block; }
+.tv-chart .tradingview-widget-container,
+.tv-chart .tradingview-widget-container__widget { height: 440px; width: 100%; }
+.tradingview-widget-copyright { font-size: 0.7rem; padding: 4px 6px 0; }
+.tradingview-widget-copyright a { color: var(--muted); text-decoration: none; }
 
 .stat-grid {
   display: grid;

@@ -69,7 +69,8 @@ the heavier work only touches the names that matter.
 ## Per-stock detail page
 
 Clicking any ticker opens `stock.html?symbol=XXX`, a detail page with the full
-signal set plus extended fundamentals: a recent price chart, day/52-week ranges,
+signal set plus extended fundamentals: an interactive TradingView 4-hour chart,
+day/52-week ranges,
 open/previous close, forward P/E, price-to-book, EPS, beta, dividend, average
 volumes, shares outstanding, sector/industry, and a website link. It also shows
 **analyst price targets** (mean/median/high/low with a range bar + recommendation),
