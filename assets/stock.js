@@ -114,7 +114,8 @@ function mountTradingView(symbol) {
   // TradingView uses dots for share classes (BRK-B -> BRK.B).
   const tvSymbol = symbol.replace(/-/g, ".");
   const config = {
-    autosize: true,
+    width: "100%",
+    height: 720,          // explicit tall chart (autosize was unreliable)
     symbol: tvSymbol,
     interval: "240",      // 4-hour candles
     range: "1M",          // ~last month (≈3-4 weeks of 4H bars)

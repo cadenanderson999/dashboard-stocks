@@ -321,8 +321,8 @@ td .reason {
   margin-bottom: 20px;
   overflow: hidden;
 }
-.tv-chart .tradingview-widget-container,
-.tv-chart .tradingview-widget-container__widget { height: 1100px; width: 100%; }
+.tv-chart .tradingview-widget-container { width: 100%; }
+.tv-chart .tradingview-widget-container__widget { width: 100%; min-height: 720px; }
 .tradingview-widget-copyright { font-size: 0.7rem; padding: 4px 6px 0; }
 .tradingview-widget-copyright a { color: var(--muted); text-decoration: none; }
 

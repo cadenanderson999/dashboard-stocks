@@ -161,7 +161,7 @@ function render() {
           <td class="num ${rvolCls}">${fmt(s.rvol_mean)}×</td>
           <td class="num ${surgeCls}">${surgeStr}</td>
           <td class="sector-cell">${s.sector || "—"}</td>
-          <td>${pill(s.rating)}<span class="reason">${s.reason || ""}</span></td>
+          <td>${pill(s.rating)}</td>
         </tr>`;
     })
     .join("");

@@ -129,7 +129,7 @@ function render() {
           <td class="num ${surgeCls}">${surgeStr}</td>
           <td class="num ${todayCls}">${fmt(s.rvol_today)}×</td>
           <td class="sector-cell">${s.sector || "—"}</td>
-          <td>${pill(s.rating)}<span class="reason">${s.reason || ""}</span></td>
+          <td>${pill(s.rating)}</td>
         </tr>`;
     })
     .join("");
