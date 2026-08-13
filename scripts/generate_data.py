@@ -69,8 +69,6 @@ OUTPUT_PATH = os.path.join(
 DETAILS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "data", "details.json"
 )
-# How many recent daily closes to store per stock (for the detail-page chart).
-DETAIL_CLOSES = 120
 
 
 # --------------------------------------------------------------------------- #
@@ -415,8 +413,8 @@ def _ts_to_date(ts):
         return None
 
 
-def build_detail(symbol, closes, info, earnings=None):
-    """Extended per-stock fundamentals + recent closes for the detail page."""
+def build_detail(info, earnings=None):
+    """Extended per-stock fundamentals for the detail page."""
     info = info or {}
 
     def num(key, n=2):
@@ -460,7 +458,6 @@ def build_detail(symbol, closes, info, earnings=None):
             "recommendation_mean": num("recommendationMean", 2),
         },
         "earnings": earnings or [],
-        "closes": [round(c, 2) for c in closes[-DETAIL_CLOSES:]],
     }
 
 
@@ -524,8 +521,7 @@ def fetch_live():
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=meta.get("sector"), lists=meta.get("lists"),
         ))
-        details[symbol] = build_detail(
-            symbol, closes, f.get("info"), f.get("earnings"))
+        details[symbol] = build_detail(f.get("info"), f.get("earnings"))
 
     print(f"Built {len(records)} records ({skipped} tickers had no usable data).")
     return records, details
@@ -599,7 +595,7 @@ def generate_sample():
                 "eps": round(ni / shares, 2) if shares else None,
             })
             rev *= rng.uniform(0.92, 0.99)  # older quarters slightly smaller
-        details[symbol] = build_detail(symbol, closes, info, earnings)
+        details[symbol] = build_detail(info, earnings)
     return records, details
 
 
