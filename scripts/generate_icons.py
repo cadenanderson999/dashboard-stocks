@@ -12,31 +12,28 @@ from PIL import Image, ImageDraw
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
 
-CREAM = (250, 243, 228, 255)   # --bg
+BG = (42, 33, 24, 255)          # dark warm brown backdrop (icon pops on it)
 WHITE = (255, 253, 248, 255)
-BROWN = (51, 41, 31, 255)       # --text / outline
+BROWN = (51, 41, 31, 255)       # --text / arrow
 YOLK = (232, 163, 61, 255)      # amber
 ORANGE = (223, 122, 43, 255)    # --accent-2
 
 
 def draw_icon(size, pad=0.0):
     """pad: extra inset (fraction) so maskable icons keep content in safe zone."""
-    img = Image.new("RGBA", (size, size), CREAM)
+    img = Image.new("RGBA", (size, size), BG)
     d = ImageDraw.Draw(img)
     s = size
 
     def sc(x):  # scale a 0..1 fraction to pixels, honoring pad
         return (pad + x * (1 - 2 * pad)) * s
 
-    lw = max(2, int(s * 0.02))
-
-    # Egg white (ellipse blob).
-    d.ellipse([sc(0.15), sc(0.22), sc(0.85), sc(0.74)], fill=WHITE,
-              outline=BROWN, width=lw)
+    # Egg white (ellipse blob) — high contrast against the dark backdrop.
+    d.ellipse([sc(0.15), sc(0.22), sc(0.85), sc(0.74)], fill=WHITE)
     # Yolk.
     cx, cy, r = sc(0.5), sc(0.49), (0.165 * (1 - 2 * pad)) * s
     d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=YOLK, outline=ORANGE,
-              width=max(2, int(lw * 0.7)))
+              width=max(2, int(s * 0.014)))
     # Chart trend line + arrowhead (inside the yolk).
     pts = [(sc(0.42), sc(0.56)), (sc(0.48), sc(0.49)),
            (sc(0.52), sc(0.52)), (sc(0.60), sc(0.43))]
