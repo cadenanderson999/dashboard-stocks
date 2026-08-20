@@ -433,63 +433,87 @@ body { -webkit-tap-highlight-color: transparent; }
 .wrap { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 
 @media (max-width: 640px) {
+  .site-header h1 { font-size: 1.4rem; }
   /* 16px inputs stop iOS from auto-zooming the page on focus. */
   .controls input, .controls select, .filter-row input,
-  #search, #sector-filter, #universe-filter, #exchange-filter, #sort-key {
-    font-size: 16px;
-  }
-  /* Segmented-control feel for the tabs. */
-  .tabs { width: 100%; }
-  .tabs .tab { flex: 1; text-align: center; }
+  #search, #sector-filter, #sort-key { font-size: 16px; }
 }
 
 /* ------------------------------------------------------------------ *
- * Responsive: the table has many columns, so hide the lowest-priority
- * ones as the screen narrows. Horizontal scroll remains as a fallback,
- * and every metric is still reachable via the Sort control.
+ * Tablet/desktop table (>700px): hide the lowest-priority columns as
+ * the window narrows. Below 700px we switch to the card layout instead.
  * Column order: 1 Ticker · 2 Price · 3 Day% · 4 MktCap · 5 P/E ·
  * 6 EMA50 · 7 EMA200 · 8 Trend · 9 RSI · 10 Momentum · 11 RVOL ·
  * 12 Surge · 13 Sector · 14 Rating
  * ------------------------------------------------------------------ */
-@media (max-width: 1180px) {
-  /* EMA 50 / EMA 200 — the Trend column already summarizes them. */
+@media (min-width: 701px) and (max-width: 1180px) {
   #stock-table th:nth-child(6), #stock-table td:nth-child(6),
   #stock-table th:nth-child(7), #stock-table td:nth-child(7) { display: none; }
-  td .reason { display: none; }
 }
-
-@media (max-width: 1000px) {
-  /* Sector — still available via the Sector filter. */
+@media (min-width: 701px) and (max-width: 1000px) {
   #stock-table th:nth-child(13), #stock-table td:nth-child(13) { display: none; }
 }
-
-@media (max-width: 840px) {
-  /* Market Cap + P/E. */
+@media (min-width: 701px) and (max-width: 840px) {
   #stock-table th:nth-child(4), #stock-table td:nth-child(4),
   #stock-table th:nth-child(5), #stock-table td:nth-child(5) { display: none; }
 }
 
-@media (max-width: 640px) {
-  .site-header h1 { font-size: 1.4rem; }
-  /* Momentum — RSI conveys the same momentum read. */
-  #stock-table th:nth-child(10), #stock-table td:nth-child(10) { display: none; }
-}
-
-/* Scanner table (15 cols): same idea. Order: 1 Ticker · 2 Price · 3 Day% ·
- * 4 MktCap · 5 P/E · 6 EMA50 · 7 EMA200 · 8 Trend · 9 RSI · 10 Momentum ·
- * 11 RVOL30d · 12 Surge · 13 RVOL Today · 14 Sector · 15 Rating. */
-@media (max-width: 1180px) {
-  #scan-table th:nth-child(6), #scan-table td:nth-child(6),
-  #scan-table th:nth-child(7), #scan-table td:nth-child(7) { display: none; }
-  #scan-table td .reason { display: none; }
-}
-@media (max-width: 1000px) {
-  #scan-table th:nth-child(14), #scan-table td:nth-child(14) { display: none; }
-}
-@media (max-width: 840px) {
-  #scan-table th:nth-child(4), #scan-table td:nth-child(4),
-  #scan-table th:nth-child(5), #scan-table td:nth-child(5) { display: none; }
-}
-@media (max-width: 640px) {
-  #scan-table th:nth-child(10), #scan-table td:nth-child(10) { display: none; }
+/* ------------------------------------------------------------------ *
+ * Mobile (<=700px): each stock becomes a card — ticker on top, metrics
+ * in a 2-column labelled grid, sector + rating full width. No H-scroll.
+ * ------------------------------------------------------------------ */
+@media (max-width: 700px) {
+  .table-scroll { overflow: visible; border: none; background: transparent; border-radius: 0; }
+  #stock-table { display: block; }
+  #stock-table thead { display: none; }
+  #stock-table tbody { display: block; }
+  #stock-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 16px;
+    row-gap: 2px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  #stock-table tbody tr:hover { background: var(--panel); }
+  #stock-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    border: none;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+  #stock-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+  }
+  /* Ticker header row: full width, prominent, no label. */
+  #stock-table td.ticker {
+    grid-column: 1 / -1;
+    display: block;
+    text-align: left;
+    font-size: 1.15rem;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  #stock-table td.ticker::before { content: none; }
+  /* Sector + Rating span the full width. */
+  #stock-table td.sector-cell,
+  #stock-table td[data-label="Rating"] {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+  #stock-table td[data-label="Rating"] { margin-top: 4px; }
 }

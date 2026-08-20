@@ -145,19 +145,19 @@ function render() {
       return `
         <tr>
           <td class="ticker"><a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
-          <td class="num">$${fmt(s.price)}</td>
-          <td class="num ${chgCls}">${chgStr}</td>
-          <td class="num">${fmtMarketCap(s.market_cap)}</td>
-          <td class="num">${fmt(s.pe, 1)}</td>
-          <td class="num">${fmt(s.ema50)}</td>
-          <td class="num">${fmt(s.ema200)}</td>
-          <td class="${trendCls}">${s.trend}</td>
-          <td class="num">${fmt(s.rsi, 1)}</td>
-          <td class="${momCls}">${s.momentum}</td>
-          <td class="num ${rvolCls}">${fmt(s.rvol_mean)}×</td>
-          <td class="num ${surgeCls}">${surgeStr}</td>
-          <td class="sector-cell">${s.sector || "—"}</td>
-          <td>${pill(s.rating)}</td>
+          <td class="num" data-label="Price">$${fmt(s.price)}</td>
+          <td class="num ${chgCls}" data-label="Day %">${chgStr}</td>
+          <td class="num" data-label="Mkt Cap">${fmtMarketCap(s.market_cap)}</td>
+          <td class="num" data-label="P/E">${fmt(s.pe, 1)}</td>
+          <td class="num" data-label="EMA 50">${fmt(s.ema50)}</td>
+          <td class="num" data-label="EMA 200">${fmt(s.ema200)}</td>
+          <td class="${trendCls}" data-label="Trend">${s.trend}</td>
+          <td class="num" data-label="RSI">${fmt(s.rsi, 1)}</td>
+          <td class="${momCls}" data-label="Momentum">${s.momentum}</td>
+          <td class="num ${rvolCls}" data-label="RVOL 30d">${fmt(s.rvol_mean)}×</td>
+          <td class="num ${surgeCls}" data-label="Surge">${surgeStr}</td>
+          <td class="sector-cell" data-label="Sector">${s.sector || "—"}</td>
+          <td data-label="Rating">${pill(s.rating)}</td>
         </tr>`;
     })
     .join("");
