@@ -1,12 +1,12 @@
 /* Buy Side Signals service worker.
    Network-first so online visitors always get fresh data/assets; cache is only
    a fallback for offline (and enables install-to-home-screen). */
-const CACHE = "bss-v1";
+const CACHE = "bss-v2";
 const SHELL = [
-  "./", "index.html", "scanner.html", "stock.html",
-  "assets/styles.css", "assets/app.js", "assets/scanner.js",
+  "./", "index.html", "stock.html",
+  "assets/styles.css", "assets/app.js",
   "assets/stock.js", "assets/filters.js", "assets/favicon.svg",
-  "assets/icon-192.png", "assets/icon-512.png", "apple-touch-icon.png",
+  "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png",
   "manifest.webmanifest",
 ];
 

@@ -3,7 +3,6 @@
 // State
 let STOCKS = [];
 let filterRating = "all";
-let filterUniverse = "all";
 let filterSector = "all";
 let searchTerm = "";
 let sortKey = "score";
@@ -49,7 +48,6 @@ async function load() {
     const data = await res.json();
     STOCKS = data.stocks || [];
 
-    populateUniverseFilter(data.lists || []);
     populateSectorFilter(data.sectors || []);
 
     if (data.is_sample) {
@@ -105,15 +103,13 @@ function render() {
   const term = searchTerm.trim().toLowerCase();
   let rows = STOCKS.filter((s) => {
     const matchesRating = filterRating === "all" || s.rating === filterRating;
-    const matchesUniverse =
-      filterUniverse === "all" || (s.lists || []).includes(filterUniverse);
     const matchesSector = filterSector === "all" || s.sector === filterSector;
     const matchesSearch =
       !term ||
       s.symbol.toLowerCase().includes(term) ||
       (s.name || "").toLowerCase().includes(term);
     const matchesRanges = !FILTER || FILTER.passes(s);
-    return matchesRating && matchesUniverse && matchesSector &&
+    return matchesRating && matchesSector &&
       matchesSearch && matchesRanges;
   });
 
@@ -211,13 +207,6 @@ function populateSortControls() {
   ).join("");
 }
 
-function populateUniverseFilter(lists) {
-  const sel = document.getElementById("universe-filter");
-  sel.innerHTML =
-    `<option value="all">All lists</option>` +
-    lists.map((l) => `<option value="${l}">${l}</option>`).join("");
-}
-
 function populateSectorFilter(sectors) {
   const sel = document.getElementById("sector-filter");
   sel.innerHTML =
@@ -236,11 +225,6 @@ function syncSortControls() {
 // --- Events --------------------------------------------------------------- //
 document.getElementById("search").addEventListener("input", (e) => {
   searchTerm = e.target.value;
-  render();
-});
-
-document.getElementById("universe-filter").addEventListener("change", (e) => {
-  filterUniverse = e.target.value;
   render();
 });
 
