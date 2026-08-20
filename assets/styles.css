@@ -424,6 +424,26 @@ td .reason {
 .site-footer .disclaimer { margin-top: 6px; }
 
 /* ------------------------------------------------------------------ *
+ * App / installed-PWA polish
+ * ------------------------------------------------------------------ */
+body { -webkit-tap-highlight-color: transparent; }
+/* Respect the notch / home-indicator safe areas when installed. */
+.site-header { padding-top: calc(32px + env(safe-area-inset-top, 0px)); }
+.site-footer { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+.wrap { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+
+@media (max-width: 640px) {
+  /* 16px inputs stop iOS from auto-zooming the page on focus. */
+  .controls input, .controls select, .filter-row input,
+  #search, #sector-filter, #universe-filter, #exchange-filter, #sort-key {
+    font-size: 16px;
+  }
+  /* Segmented-control feel for the tabs. */
+  .tabs { width: 100%; }
+  .tabs .tab { flex: 1; text-align: center; }
+}
+
+/* ------------------------------------------------------------------ *
  * Responsive: the table has many columns, so hide the lowest-priority
  * ones as the screen narrows. Horizontal scroll remains as a fallback,
  * and every metric is still reachable via the Sort control.
