@@ -517,3 +517,46 @@ body { -webkit-tap-highlight-color: transparent; }
   }
   #stock-table td[data-label="Rating"] { margin-top: 4px; }
 }
+
+/* ------------------------------------------------------------------ *
+ * Mobile controls (Option A): search on its own row, a compact
+ * sector · Filters · Sort bar, a swipeable rating strip, 5 compact
+ * summary tiles, and a full-width bottom-sheet filter panel.
+ * ------------------------------------------------------------------ */
+@media (max-width: 700px) {
+  .controls { gap: 10px; }
+  #search { flex: 1 1 100%; order: 0; }
+  #sector-filter { order: 1; flex: 1 1 120px; }
+  .filter-menu { order: 2; }
+  .sort-control { order: 3; gap: 6px; }
+  .sort-control label { display: none; }        /* drop "Sort by" text */
+  #sort-key { padding: 8px 10px; }
+
+  /* Rating chips become a single swipeable strip. */
+  #rating-filters {
+    order: 4;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  #rating-filters .chip { flex: 0 0 auto; }
+
+  /* Filter panel = full-width bottom sheet (no more off-screen overflow). */
+  .filter-panel {
+    position: fixed;
+    left: 0; right: 0; bottom: 0; top: auto;
+    width: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 34px rgba(90, 66, 20, 0.30);
+  }
+
+  /* Summary as five compact tiles across. */
+  .summary { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .summary .card { padding: 9px 3px; text-align: center; }
+  .summary .card .n { font-size: 1.05rem; }
+  .summary .card .l { font-size: 0.5rem; letter-spacing: 0; }
+}
