@@ -236,9 +236,44 @@ tbody td { padding: 10px 10px; border-bottom: 1px solid var(--border); white-spa
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--panel-2); }
 
-.ticker { font-weight: 700; }
-.ticker a { color: inherit; text-decoration: none; display: block; }
+.ticker { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.ticker a { color: inherit; text-decoration: none; display: block; flex: 1; min-width: 0; }
 .ticker a:hover { color: var(--accent); }
+.star {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  font-size: 1.1rem; line-height: 1; color: var(--muted); flex: 0 0 auto;
+}
+.star:hover { color: var(--accent); }
+.star.on { color: var(--accent); }
+
+/* Account / auth */
+.auth-area { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.auth-email {
+  color: var(--muted); font-size: 0.82rem; max-width: 180px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Login modal */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100; padding: 16px;
+  background: rgba(42, 33, 25, 0.45);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-backdrop.hidden { display: none; }
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; width: min(360px, 92vw);
+  box-shadow: 0 20px 50px rgba(90, 66, 20, 0.3);
+}
+.modal h3 { margin: 0 0 14px; }
+.modal input {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 12px; font-size: 16px; margin-bottom: 10px;
+  color: var(--text); outline: none;
+}
+.modal input:focus { border-color: var(--accent); }
+.modal-err { color: var(--red); font-size: 0.8rem; min-height: 1em; margin-bottom: 8px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .ticker a:hover .name { color: var(--accent-2); }
 .ticker .name { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; }
 .sector-cell { color: var(--muted); font-size: 0.82rem; }
@@ -299,6 +334,7 @@ td .reason {
   margin: 8px 0 20px;
 }
 .stock-symbol { font-size: 2rem; font-weight: 800; letter-spacing: -0.01em; }
+.stock-symbol .star { font-size: 1.7rem; margin-right: 4px; vertical-align: baseline; }
 .stock-name { color: var(--muted); font-size: 1rem; margin-top: 2px; }
 .stock-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
 .tag {
@@ -501,13 +537,16 @@ body { -webkit-tap-highlight-color: transparent; }
   /* Ticker header row: full width, prominent, no label. */
   #stock-table td.ticker {
     grid-column: 1 / -1;
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     text-align: left;
     font-size: 1.15rem;
     padding-bottom: 8px;
     margin-bottom: 4px;
     border-bottom: 1px solid var(--border);
   }
+  #stock-table td.ticker .star { font-size: 1.3rem; }
   #stock-table td.ticker::before { content: none; }
   /* Sector + Rating span the full width. */
   #stock-table td.sector-cell,

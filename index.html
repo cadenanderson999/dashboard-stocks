@@ -20,6 +20,7 @@
   <header class="site-header">
     <div class="wrap">
       <h1>Buy Side Signals</h1>
+      <div id="auth-area" class="auth-area"></div>
     </div>
   </header>
 
@@ -37,6 +38,7 @@
         <button id="filter-btn" class="chip" aria-haspopup="true">Filters</button>
         <div id="filter-panel" class="filter-panel hidden"><!-- built by JS --></div>
       </div>
+      <button id="watchlist-toggle" class="chip hidden" aria-pressed="false">★ Watchlist</button>
       <div class="filters" id="rating-filters" role="group" aria-label="Filter by rating">
         <button class="chip active" data-filter="all">All</button>
         <button class="chip" data-filter="Strong Buy">Strong Buy</button>
@@ -95,6 +97,9 @@
     </p>
   </footer>
 
+  <script src="assets/supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/account.js"></script>
   <script src="assets/filters.js"></script>
   <script src="assets/app.js"></script>
   <script>

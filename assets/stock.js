@@ -230,7 +230,7 @@ function render(el, s, d) {
   el.innerHTML = `
     <div class="stock-head">
       <div>
-        <div class="stock-symbol">${s.symbol}</div>
+        <div class="stock-symbol"><span id="detail-star"></span>${s.symbol}</div>
         <div class="stock-name">${s.name || ""}</div>
         <div class="stock-tags">
           ${s.sector ? `<span class="tag">${s.sector}</span>` : ""}
@@ -298,6 +298,19 @@ function render(el, s, d) {
 
   // Mount the TradingView widget into the container just rendered.
   mountTradingView(s.symbol);
+  renderDetailStar();
 }
+
+function renderDetailStar() {
+  const host = document.getElementById("detail-star");
+  if (!host) return;
+  if (!(window.Account && Account.ready)) { host.innerHTML = ""; return; }
+  const on = Account.isStarred(SYMBOL);
+  host.innerHTML = `<button class="star${on ? " on" : ""}" title="Watchlist" ` +
+    `aria-label="Toggle watchlist">${on ? "★" : "☆"}</button>`;
+  host.querySelector("button").onclick = () => Account.toggleStar(SYMBOL);
+}
+
+if (window.Account && Account.ready) Account.onChange(renderDetailStar);
 
 load();

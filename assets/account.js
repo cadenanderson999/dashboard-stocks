@@ -1,0 +1,133 @@
+"use strict";
+/* Auth + watchlist via Supabase. Exposes window.Account:
+     Account.ready            -> config + SDK present
+     Account.isLoggedIn()
+     Account.isStarred(sym)
+     Account.count()
+     Account.toggleStar(sym)  -> add/remove (prompts login if needed)
+     Account.requireLogin()   -> open the login modal
+     Account.onChange(fn)     -> called when auth or watchlist changes
+*/
+window.Account = (function () {
+  const URL = window.SUPABASE_URL;
+  const KEY = window.SUPABASE_ANON_KEY;
+  const ready = !!(URL && KEY && window.supabase && window.supabase.createClient);
+
+  const state = { user: null, watchlist: new Set() };
+  const listeners = [];
+  let client = null;
+  let modal = null;
+
+  const fire = () => listeners.forEach((fn) => { try { fn(); } catch (e) {} });
+
+  // --- header auth area -------------------------------------------------- //
+  function renderAuthArea() {
+    const el = document.getElementById("auth-area");
+    if (!el) return;
+    if (!ready) { el.innerHTML = ""; return; }
+    if (state.user) {
+      el.innerHTML =
+        `<span class="auth-email">${state.user.email || "account"}</span>` +
+        `<button class="chip" id="logout-btn">Log out</button>`;
+      el.querySelector("#logout-btn").onclick = () => client.auth.signOut();
+    } else {
+      el.innerHTML = `<button class="chip" id="login-btn">Log in</button>`;
+      el.querySelector("#login-btn").onclick = openLogin;
+    }
+  }
+
+  // --- login modal ------------------------------------------------------- //
+  function buildModal() {
+    modal = document.createElement("div");
+    modal.className = "modal-backdrop hidden";
+    modal.innerHTML = `
+      <div class="modal">
+        <h3>Log in</h3>
+        <form id="login-form">
+          <input id="login-email" type="email" placeholder="Email"
+                 autocomplete="username" required />
+          <input id="login-pass" type="password" placeholder="Password"
+                 autocomplete="current-password" required />
+          <div class="modal-err" id="login-err"></div>
+          <div class="modal-actions">
+            <button type="button" class="chip" id="login-cancel">Cancel</button>
+            <button type="submit" class="chip active" id="login-submit">Log in</button>
+          </div>
+        </form>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeLogin(); });
+    modal.querySelector("#login-cancel").onclick = closeLogin;
+    modal.querySelector("#login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = modal.querySelector("#login-email").value.trim();
+      const password = modal.querySelector("#login-pass").value;
+      const err = modal.querySelector("#login-err");
+      err.textContent = "Signing in…";
+      const { error } = await client.auth.signInWithPassword({ email, password });
+      err.textContent = error ? error.message : "";
+      if (!error) closeLogin();
+    });
+  }
+  function openLogin() {
+    if (!ready) return;
+    if (!modal) buildModal();
+    modal.classList.remove("hidden");
+    const em = modal.querySelector("#login-email");
+    if (em) em.focus();
+  }
+  function closeLogin() { if (modal) modal.classList.add("hidden"); }
+
+  // --- watchlist --------------------------------------------------------- //
+  async function loadWatchlist() {
+    state.watchlist = new Set();
+    if (state.user) {
+      const { data, error } = await client.from("watchlist").select("symbol");
+      if (!error && data) state.watchlist = new Set(data.map((r) => r.symbol));
+    }
+    fire();
+  }
+
+  async function toggleStar(sym) {
+    if (!ready) return;
+    if (!state.user) { openLogin(); return; }
+    if (state.watchlist.has(sym)) {
+      state.watchlist.delete(sym); fire();
+      const { error } = await client.from("watchlist").delete().eq("symbol", sym);
+      if (error) { state.watchlist.add(sym); fire(); }
+    } else {
+      state.watchlist.add(sym); fire();
+      const { error } = await client.from("watchlist")
+        .insert({ symbol: sym, user_id: state.user.id });
+      if (error) { state.watchlist.delete(sym); fire(); }
+    }
+  }
+
+  // --- init -------------------------------------------------------------- //
+  if (ready) {
+    client = window.supabase.createClient(URL, KEY);
+    client.auth.getSession().then(({ data }) => {
+      state.user = data.session ? data.session.user : null;
+      renderAuthArea();
+      loadWatchlist();
+    });
+    client.auth.onAuthStateChange((_e, session) => {
+      state.user = session ? session.user : null;
+      renderAuthArea();
+      loadWatchlist();
+    });
+  }
+  // Render the (possibly empty) auth area as soon as the DOM is ready.
+  if (document.readyState !== "loading") renderAuthArea();
+  else document.addEventListener("DOMContentLoaded", renderAuthArea);
+
+  return {
+    ready,
+    isLoggedIn: () => !!state.user,
+    isStarred: (s) => state.watchlist.has(s),
+    count: () => state.watchlist.size,
+    toggleStar,
+    requireLogin: openLogin,
+    onChange: (fn) => listeners.push(fn),
+  };
+})();

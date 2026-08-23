@@ -4,6 +4,7 @@
 let STOCKS = [];
 let filterRating = "all";
 let filterSector = "all";
+let filterWatchlist = false;
 let searchTerm = "";
 let sortKey = "score";
 let sortDir = "desc"; // 'asc' | 'desc'
@@ -109,8 +110,10 @@ function render() {
       s.symbol.toLowerCase().includes(term) ||
       (s.name || "").toLowerCase().includes(term);
     const matchesRanges = !FILTER || FILTER.passes(s);
+    const matchesWatch = !filterWatchlist ||
+      (window.Account && Account.isStarred(s.symbol));
     return matchesRating && matchesSector &&
-      matchesSearch && matchesRanges;
+      matchesSearch && matchesRanges && matchesWatch;
   });
 
   rows.sort(compare);
@@ -142,9 +145,14 @@ function render() {
       const surgeCls = s.rvol_high_days > 0 ? "rvol-high" : "";
       const surgeStr = s.rvol_high_days === null || s.rvol_high_days === undefined
         ? "—" : s.rvol_high_days;
+      const acc = window.Account && Account.ready;
+      const starred = acc && Account.isStarred(s.symbol);
+      const star = acc
+        ? `<button class="star${starred ? " on" : ""}" data-sym="${s.symbol}" aria-label="Toggle watchlist" title="Watchlist">${starred ? "★" : "☆"}</button>`
+        : "";
       return `
         <tr>
-          <td class="ticker"><a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
+          <td class="ticker">${star}<a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
           <td class="num" data-label="Price">$${fmt(s.price)}</td>
           <td class="num ${chgCls}" data-label="Day %">${chgStr}</td>
           <td class="num" data-label="Mkt Cap">${fmtMarketCap(s.market_cap)}</td>
@@ -237,8 +245,27 @@ document.getElementById("rating-filters").addEventListener("click", (e) => {
   const btn = e.target.closest(".chip");
   if (!btn) return;
   filterRating = btn.dataset.filter;
-  document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+  document.querySelectorAll("#rating-filters .chip")
+    .forEach((c) => c.classList.remove("active"));
   btn.classList.add("active");
+  render();
+});
+
+// Star toggle (event-delegated on the table body).
+document.getElementById("stock-body").addEventListener("click", (e) => {
+  const star = e.target.closest(".star");
+  if (!star) return;
+  e.preventDefault();
+  if (window.Account) Account.toggleStar(star.dataset.sym);
+});
+
+// "My Watchlist" toggle.
+const watchlistToggle = document.getElementById("watchlist-toggle");
+watchlistToggle.addEventListener("click", () => {
+  if (window.Account && !Account.isLoggedIn()) { Account.requireLogin(); return; }
+  filterWatchlist = !filterWatchlist;
+  watchlistToggle.classList.toggle("active", filterWatchlist);
+  watchlistToggle.setAttribute("aria-pressed", String(filterWatchlist));
   render();
 });
 
@@ -269,6 +296,21 @@ document.getElementById("sort-dir").addEventListener("click", () => {
 });
 
 populateSortControls();
+
+// Show the watchlist toggle only when accounts are available, and re-render
+// (stars + any watchlist filter) whenever auth/watchlist state changes.
+if (window.Account && Account.ready) {
+  watchlistToggle.classList.remove("hidden");
+  Account.onChange(() => {
+    // If the user logs out while filtering their watchlist, drop the filter.
+    if (filterWatchlist && !Account.isLoggedIn()) {
+      filterWatchlist = false;
+      watchlistToggle.classList.remove("active");
+      watchlistToggle.setAttribute("aria-pressed", "false");
+    }
+    render();
+  });
+}
 
 FILTER = RangeFilters.create({
   button: document.getElementById("filter-btn"),
