@@ -31,47 +31,89 @@ window.Account = (function () {
         `<button class="chip" id="logout-btn">Log out</button>`;
       el.querySelector("#logout-btn").onclick = () => client.auth.signOut();
     } else {
-      el.innerHTML = `<button class="chip" id="login-btn">Log in</button>`;
-      el.querySelector("#login-btn").onclick = openLogin;
+      el.innerHTML =
+        `<button class="chip" id="signup-btn">Sign up</button>` +
+        `<button class="chip active" id="login-btn">Log in</button>`;
+      el.querySelector("#login-btn").onclick = () => openLogin("login");
+      el.querySelector("#signup-btn").onclick = () => openLogin("signup");
     }
   }
 
-  // --- login modal ------------------------------------------------------- //
+  // --- login / sign-up modal -------------------------------------------- //
+  let mode = "login"; // "login" | "signup"
+
+  function setMode(m) {
+    mode = m;
+    modal.querySelector("#auth-title").textContent =
+      m === "signup" ? "Create account" : "Log in";
+    modal.querySelector("#login-submit").textContent =
+      m === "signup" ? "Sign up" : "Log in";
+    modal.querySelector("#switch-text").textContent =
+      m === "signup" ? "Already have an account?" : "Need an account?";
+    modal.querySelector("#switch-link").textContent =
+      m === "signup" ? "Log in" : "Sign up";
+    modal.querySelector("#login-pass").setAttribute(
+      "autocomplete", m === "signup" ? "new-password" : "current-password");
+    modal.querySelector("#login-err").textContent = "";
+  }
+
   function buildModal() {
     modal = document.createElement("div");
     modal.className = "modal-backdrop hidden";
     modal.innerHTML = `
       <div class="modal">
-        <h3>Log in</h3>
+        <h3 id="auth-title">Log in</h3>
         <form id="login-form">
           <input id="login-email" type="email" placeholder="Email"
                  autocomplete="username" required />
-          <input id="login-pass" type="password" placeholder="Password"
-                 autocomplete="current-password" required />
+          <input id="login-pass" type="password" placeholder="Password (6+ chars)"
+                 autocomplete="current-password" required minlength="6" />
           <div class="modal-err" id="login-err"></div>
           <div class="modal-actions">
             <button type="button" class="chip" id="login-cancel">Cancel</button>
             <button type="submit" class="chip active" id="login-submit">Log in</button>
           </div>
         </form>
+        <div class="modal-switch">
+          <span id="switch-text">Need an account?</span>
+          <a href="#" id="switch-link">Sign up</a>
+        </div>
       </div>`;
     document.body.appendChild(modal);
     modal.addEventListener("click", (e) => { if (e.target === modal) closeLogin(); });
     modal.querySelector("#login-cancel").onclick = closeLogin;
+    modal.querySelector("#switch-link").onclick = (e) => {
+      e.preventDefault();
+      setMode(mode === "login" ? "signup" : "login");
+    };
     modal.querySelector("#login-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = modal.querySelector("#login-email").value.trim();
       const password = modal.querySelector("#login-pass").value;
       const err = modal.querySelector("#login-err");
-      err.textContent = "Signing in…";
-      const { error } = await client.auth.signInWithPassword({ email, password });
-      err.textContent = error ? error.message : "";
-      if (!error) closeLogin();
+
+      if (mode === "signup") {
+        err.textContent = "Creating account…";
+        const { data, error } = await client.auth.signUp({ email, password });
+        if (error) { err.textContent = error.message; return; }
+        if (data.session) { err.textContent = ""; closeLogin(); }
+        else {
+          err.textContent = "Account created — check your email to confirm, then log in.";
+          setMode("login");
+        }
+      } else {
+        err.textContent = "Signing in…";
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        err.textContent = error ? error.message : "";
+        if (!error) closeLogin();
+      }
     });
   }
-  function openLogin() {
+
+  function openLogin(startMode) {
     if (!ready) return;
     if (!modal) buildModal();
+    setMode(startMode === "signup" ? "signup" : "login");
     modal.classList.remove("hidden");
     const em = modal.querySelector("#login-email");
     if (em) em.focus();
