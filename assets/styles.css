@@ -29,8 +29,8 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The data table is dense, so use a generous width and let it scroll if needed. */
-.wrap { width: min(1320px, 95vw); margin: 0 auto; }
+/* The data table is dense, so use most of the screen width. */
+.wrap { width: min(1440px, 96vw); margin: 0 auto; }
 
 .site-header {
   background: linear-gradient(180deg, #f7ecd3 0%, var(--bg) 100%);
@@ -214,10 +214,10 @@ html, body {
   border-radius: var(--radius);
   background: var(--panel);
 }
-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 thead th {
   text-align: left;
-  padding: 11px 10px;
+  padding: 9px 7px;
   color: var(--muted);
   font-weight: 600;
   border-bottom: 1px solid var(--border);
@@ -232,7 +232,9 @@ th.sorted-asc::after { content: " ▲"; color: var(--accent); }
 th.sorted-desc::after { content: " ▼"; color: var(--accent); }
 th.num, td.num { text-align: right; }
 
-tbody td { padding: 10px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody td { padding: 9px 7px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+/* Keep the (widest) sector text from hogging space on desktop. */
+#stock-table td.sector-cell { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--panel-2); }
 
@@ -484,16 +486,23 @@ body { -webkit-tap-highlight-color: transparent; }
  * 6 EMA50 · 7 EMA200 · 8 Trend · 9 RSI · 10 Momentum · 11 RVOL ·
  * 12 Surge · 13 Sector · 14 Rating
  * ------------------------------------------------------------------ */
-@media (min-width: 701px) and (max-width: 1180px) {
+@media (min-width: 701px) and (max-width: 1360px) {
+  /* EMA 50 / EMA 200 — Trend already summarizes them. */
   #stock-table th:nth-child(6), #stock-table td:nth-child(6),
   #stock-table th:nth-child(7), #stock-table td:nth-child(7) { display: none; }
 }
-@media (min-width: 701px) and (max-width: 1000px) {
+@media (min-width: 701px) and (max-width: 1080px) {
+  /* Sector — still available via the Sector filter. */
   #stock-table th:nth-child(13), #stock-table td:nth-child(13) { display: none; }
 }
-@media (min-width: 701px) and (max-width: 840px) {
+@media (min-width: 701px) and (max-width: 940px) {
+  /* Market Cap + P/E. */
   #stock-table th:nth-child(4), #stock-table td:nth-child(4),
   #stock-table th:nth-child(5), #stock-table td:nth-child(5) { display: none; }
+}
+@media (min-width: 701px) and (max-width: 820px) {
+  /* Momentum — RSI conveys a similar read. */
+  #stock-table th:nth-child(10), #stock-table td:nth-child(10) { display: none; }
 }
 
 /* ------------------------------------------------------------------ *
@@ -555,6 +564,8 @@ body { -webkit-tap-highlight-color: transparent; }
   #stock-table td[data-label="Rating"] {
     grid-column: 1 / -1;
     white-space: normal;
+    max-width: none;
+    overflow: visible;
   }
   #stock-table td[data-label="Rating"] { margin-top: 4px; }
 }
