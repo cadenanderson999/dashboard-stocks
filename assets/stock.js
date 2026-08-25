@@ -127,12 +127,14 @@ function mountTradingView(symbol) {
     allow_symbol_change: false,
     save_image: false,
     calendar: false,
-    // Pre-loaded indicators: 20/50/200 EMA + Volume.
+    // Pre-loaded indicators: E3V = triple EMA (9 / 20 / 200), Volume, and
+    // VRVP = Visible Range Volume Profile.
     studies: [
+      { id: "MAExp@tv-basicstudies", inputs: { length: 9 } },
       { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
-      { id: "MAExp@tv-basicstudies", inputs: { length: 50 } },
       { id: "MAExp@tv-basicstudies", inputs: { length: 200 } },
       "Volume@tv-basicstudies",
+      "VbPVisible@tv-volumebyprice",
     ],
     support_host: "https://www.tradingview.com",
   };
