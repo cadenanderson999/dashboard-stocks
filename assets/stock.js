@@ -127,6 +127,13 @@ function mountTradingView(symbol) {
     allow_symbol_change: false,
     save_image: false,
     calendar: false,
+    // Pre-loaded indicators: 20/50/200 EMA + Volume.
+    studies: [
+      { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
+      { id: "MAExp@tv-basicstudies", inputs: { length: 50 } },
+      { id: "MAExp@tv-basicstudies", inputs: { length: 200 } },
+      "Volume@tv-basicstudies",
+    ],
     support_host: "https://www.tradingview.com",
   };
   const script = document.createElement("script");
