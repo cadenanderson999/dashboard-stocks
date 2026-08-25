@@ -13,12 +13,14 @@ window.Account = (function () {
   const KEY = window.SUPABASE_ANON_KEY;
   const ready = !!(URL && KEY && window.supabase && window.supabase.createClient);
 
-  const state = { user: null, watchlist: new Set() };
+  const state = { user: null, watchlist: new Set(), chartPrefs: null };
   const listeners = [];
+  const prefsListeners = [];
   let client = null;
   let modal = null;
 
   const fire = () => listeners.forEach((fn) => { try { fn(); } catch (e) {} });
+  const firePrefs = () => prefsListeners.forEach((fn) => { try { fn(); } catch (e) {} });
 
   // --- header auth area -------------------------------------------------- //
   function renderAuthArea() {
@@ -145,6 +147,27 @@ window.Account = (function () {
     }
   }
 
+  // --- chart preferences ------------------------------------------------- //
+  async function loadPrefs() {
+    state.chartPrefs = null;
+    if (state.user) {
+      const { data, error } = await client.from("prefs")
+        .select("chart").eq("user_id", state.user.id).maybeSingle();
+      if (!error && data) state.chartPrefs = data.chart || {};
+      else state.chartPrefs = {};
+    }
+    firePrefs();
+  }
+
+  async function saveChartPrefs(chart) {
+    if (!ready) return { error: { message: "unavailable" } };
+    if (!state.user) { openLogin(); return { error: { message: "not signed in" } }; }
+    const { error } = await client.from("prefs")
+      .upsert({ user_id: state.user.id, chart, updated_at: new Date().toISOString() });
+    if (!error) { state.chartPrefs = chart; firePrefs(); }
+    return { error };
+  }
+
   // --- init -------------------------------------------------------------- //
   if (ready) {
     client = window.supabase.createClient(URL, KEY);
@@ -152,11 +175,13 @@ window.Account = (function () {
       state.user = data.session ? data.session.user : null;
       renderAuthArea();
       loadWatchlist();
+      loadPrefs();
     });
     client.auth.onAuthStateChange((_e, session) => {
       state.user = session ? session.user : null;
       renderAuthArea();
       loadWatchlist();
+      loadPrefs();
     });
   }
   // Render the (possibly empty) auth area as soon as the DOM is ready.
@@ -171,5 +196,8 @@ window.Account = (function () {
     toggleStar,
     requireLogin: openLogin,
     onChange: (fn) => listeners.push(fn),
+    getChartPrefs: () => state.chartPrefs || {},
+    saveChartPrefs,
+    onPrefsChange: (fn) => prefsListeners.push(fn),
   };
 })();

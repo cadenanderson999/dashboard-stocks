@@ -278,6 +278,22 @@ tbody tr:hover { background: var(--panel-2); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .modal-switch { margin-top: 14px; font-size: 0.85rem; color: var(--muted); text-align: center; }
 .modal-switch a { color: var(--accent-2); text-decoration: none; font-weight: 600; margin-left: 4px; }
+
+/* Chart settings */
+.chart-toolbar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.cs-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 0.9rem; }
+.cs-row select {
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 8px 10px; font-size: 0.9rem; outline: none;
+}
+.cs-group { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); margin-bottom: 12px; }
+.cs-checks {
+  display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px;
+  text-transform: none; letter-spacing: 0; color: var(--text); font-size: 0.9rem;
+}
+.cs-checks label { display: inline-flex; align-items: center; gap: 6px; }
+.cs-checks input { width: 16px; height: 16px; }
 .ticker a:hover .name { color: var(--accent-2); }
 .ticker .name { display: block; color: var(--muted); font-weight: 400; font-size: 0.75rem; }
 .sector-cell { color: var(--muted); font-size: 0.82rem; }

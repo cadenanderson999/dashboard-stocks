@@ -95,9 +95,39 @@ async function load() {
 }
 
 // --- TradingView chart ---------------------------------------------------- //
+// Default chart preferences (used when logged out or before prefs load).
+const DEFAULT_CHART = {
+  interval: "240",
+  emas: [9, 20, 200],
+  volume: true, vrvp: true, vwap: false, bbands: false, rsi: false, macd: false,
+};
+const EMA_CHOICES = [9, 20, 50, 100, 200];
+
+function currentPrefs() {
+  const saved = (window.Account && Account.ready && Account.getChartPrefs)
+    ? Account.getChartPrefs() : null;
+  return Object.assign({}, DEFAULT_CHART, saved || {});
+}
+
+function buildStudies(p) {
+  const s = [];
+  (p.emas || []).forEach((n) =>
+    s.push({ id: "MAExp@tv-basicstudies", inputs: { length: n } }));
+  if (p.volume) s.push("Volume@tv-basicstudies");
+  if (p.vwap) s.push("VWAP@tv-basicstudies");
+  if (p.bbands) s.push("BB@tv-basicstudies");
+  if (p.rsi) s.push("RSI@tv-basicstudies");
+  if (p.macd) s.push("MACD@tv-basicstudies");
+  if (p.vrvp) s.push("VbPVisible@tv-volumebyprice");
+  return s;
+}
+
 function tvChartMarkup() {
   return `
     <div class="tv-chart">
+      <div class="chart-toolbar">
+        <button id="chart-settings-btn" class="chip hidden">⚙ Chart settings</button>
+      </div>
       <div class="tradingview-widget-container" id="tv-container">
         <div class="tradingview-widget-container__widget"></div>
         <div class="tradingview-widget-copyright">
@@ -111,31 +141,28 @@ function tvChartMarkup() {
 function mountTradingView(symbol) {
   const container = document.getElementById("tv-container");
   if (!container) return;
-  // TradingView uses dots for share classes (BRK-B -> BRK.B).
-  const tvSymbol = symbol.replace(/-/g, ".");
+  const p = currentPrefs();
+  // Rebuild the container so re-mounting (after a settings change) is clean.
+  container.innerHTML =
+    `<div class="tradingview-widget-container__widget"></div>` +
+    `<div class="tradingview-widget-copyright">` +
+    `<a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">` +
+    `Track all markets on TradingView</a></div>`;
   const config = {
     width: "100%",
-    height: 720,          // explicit tall chart (autosize was unreliable)
-    symbol: tvSymbol,
-    interval: "240",      // 4-hour candles
-    range: "1M",          // ~last month (≈3-4 weeks of 4H bars)
+    height: 720,
+    symbol: symbol.replace(/-/g, "."), // BRK-B -> BRK.B
+    interval: p.interval || "240",
+    range: "1M",
     timezone: "America/New_York",
     theme: "light",
-    style: "1",           // candles
+    style: "1",
     locale: "en",
     hide_side_toolbar: true,
     allow_symbol_change: false,
     save_image: false,
     calendar: false,
-    // Pre-loaded indicators: E3V = triple EMA (9 / 20 / 200), Volume, and
-    // VRVP = Visible Range Volume Profile.
-    studies: [
-      { id: "MAExp@tv-basicstudies", inputs: { length: 9 } },
-      { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
-      { id: "MAExp@tv-basicstudies", inputs: { length: 200 } },
-      "Volume@tv-basicstudies",
-      "VbPVisible@tv-volumebyprice",
-    ],
+    studies: buildStudies(p),
     support_host: "https://www.tradingview.com",
   };
   const script = document.createElement("script");
@@ -145,6 +172,81 @@ function mountTradingView(symbol) {
     "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
   script.text = JSON.stringify(config);
   container.appendChild(script);
+}
+
+// --- chart settings panel (per-user, saved to their account) -------------- //
+let chartModal = null;
+function openChartSettings() {
+  const p = currentPrefs();
+  if (!chartModal) {
+    chartModal = document.createElement("div");
+    chartModal.className = "modal-backdrop hidden";
+    chartModal.innerHTML = `
+      <div class="modal">
+        <h3>Chart settings</h3>
+        <label class="cs-row">Interval
+          <select id="cs-interval">
+            <option value="60">1 hour</option>
+            <option value="240">4 hour</option>
+            <option value="D">1 day</option>
+            <option value="W">1 week</option>
+          </select>
+        </label>
+        <div class="cs-group">EMAs
+          <div id="cs-emas" class="cs-checks">
+            ${EMA_CHOICES.map((n) =>
+              `<label><input type="checkbox" value="${n}" data-ema> ${n}</label>`).join("")}
+          </div>
+        </div>
+        <div class="cs-group">Indicators
+          <div class="cs-checks">
+            <label><input type="checkbox" data-ind="volume"> Volume</label>
+            <label><input type="checkbox" data-ind="vwap"> VWAP</label>
+            <label><input type="checkbox" data-ind="bbands"> Bollinger</label>
+            <label><input type="checkbox" data-ind="rsi"> RSI</label>
+            <label><input type="checkbox" data-ind="macd"> MACD</label>
+            <label><input type="checkbox" data-ind="vrvp"> Volume Profile</label>
+          </div>
+        </div>
+        <div class="modal-err" id="cs-err"></div>
+        <div class="modal-actions">
+          <button type="button" class="chip" id="cs-cancel">Cancel</button>
+          <button type="button" class="chip active" id="cs-save">Save</button>
+        </div>
+      </div>`;
+    document.body.appendChild(chartModal);
+    chartModal.addEventListener("click", (e) => {
+      if (e.target === chartModal) chartModal.classList.add("hidden");
+    });
+    chartModal.querySelector("#cs-cancel").onclick =
+      () => chartModal.classList.add("hidden");
+    chartModal.querySelector("#cs-save").onclick = saveChartSettings;
+  }
+  // Populate from current prefs.
+  chartModal.querySelector("#cs-interval").value = p.interval || "240";
+  chartModal.querySelectorAll("[data-ema]").forEach((c) => {
+    c.checked = (p.emas || []).includes(Number(c.value));
+  });
+  chartModal.querySelectorAll("[data-ind]").forEach((c) => {
+    c.checked = !!p[c.dataset.ind];
+  });
+  chartModal.querySelector("#cs-err").textContent = "";
+  chartModal.classList.remove("hidden");
+}
+
+async function saveChartSettings() {
+  const emas = [...chartModal.querySelectorAll("[data-ema]:checked")]
+    .map((c) => Number(c.value));
+  const prefs = { interval: chartModal.querySelector("#cs-interval").value, emas };
+  chartModal.querySelectorAll("[data-ind]").forEach((c) => {
+    prefs[c.dataset.ind] = c.checked;
+  });
+  const err = chartModal.querySelector("#cs-err");
+  err.textContent = "Saving…";
+  const { error } = await Account.saveChartPrefs(prefs);
+  if (error) { err.textContent = error.message || "Could not save."; return; }
+  chartModal.classList.add("hidden");
+  mountTradingView(SYMBOL); // re-render with the new settings
 }
 
 // --- render --------------------------------------------------------------- //
@@ -308,6 +410,7 @@ function render(el, s, d) {
   // Mount the TradingView widget into the container just rendered.
   mountTradingView(s.symbol);
   renderDetailStar();
+  setupChartSettingsButton();
 }
 
 function renderDetailStar() {
@@ -320,6 +423,19 @@ function renderDetailStar() {
   host.querySelector("button").onclick = () => Account.toggleStar(SYMBOL);
 }
 
-if (window.Account && Account.ready) Account.onChange(renderDetailStar);
+function setupChartSettingsButton() {
+  const btn = document.getElementById("chart-settings-btn");
+  if (!btn) return;
+  const show = window.Account && Account.ready && Account.isLoggedIn();
+  btn.classList.toggle("hidden", !show);
+  btn.onclick = openChartSettings;
+}
+
+if (window.Account && Account.ready) {
+  // Auth changes: refresh the star + show/hide the chart-settings button.
+  Account.onChange(() => { renderDetailStar(); setupChartSettingsButton(); });
+  // Prefs load/change: re-render the chart with the user's saved indicators.
+  Account.onPrefsChange(() => { mountTradingView(SYMBOL); setupChartSettingsButton(); });
+}
 
 load();
