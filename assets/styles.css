@@ -1,19 +1,24 @@
 :root {
-  /* "Buy Side Brunch" palette: warm cream, champagne amber, egg-yolk orange,
-     dark-brown text, with a brunch sage green. */
-  --bg: #faf3e4;            /* warm cream background */
-  --panel: #fffdf8;         /* card / near-white */
-  --panel-2: #f3e9d4;       /* tinted header cells / hover */
-  --border: #e7dabf;        /* warm tan border */
-  --border-hover: #d6c19a;  /* darker tan on hover */
-  --text: #33291f;          /* dark brown */
-  --muted: #927f63;         /* muted brown */
-  --accent: #e0962e;        /* champagne amber (brand) */
-  --accent-2: #df7a2b;      /* egg-yolk orange */
-  --green: #4f9d56;         /* sage green — positive / buy */
-  --green-soft: #6fb877;    /* lighter green */
-  --red: #cf5a44;           /* warm red — negative / sell */
-  --yellow: #b9851f;        /* deep gold — readable on cream */
+  /* "Buy Side Brunch" palette, dark mode: black background, warm tan
+     borders/panels, champagne amber + egg-yolk orange + sage green accents. */
+  --bg: #000000;             /* true black background */
+  --panel: #131313;          /* card panel */
+  --panel-2: #1c1c1c;        /* tinted header cells / hover */
+  --border: #34302a;         /* warm neutral border */
+  --border-hover: #48423a;   /* lighter border on hover */
+  --text: #fbfaf7;           /* near-white */
+  --muted: #9a958a;          /* muted warm gray */
+  --accent: #ffb020;         /* champagne amber (brand) */
+  --accent-2: #ff7a1a;       /* egg-yolk orange */
+  --green: #45d968;          /* sage green — positive / buy */
+  --green-soft: #6ee98c;     /* lighter green */
+  --red: #ff5c45;            /* warm red — negative / sell */
+  --yellow: #ffc247;         /* deep gold — readable on black */
+  --accent-rgb: 255, 176, 32;
+  --green-rgb: 69, 217, 104;
+  --red-rgb: 255, 92, 69;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --overlay: rgba(0, 0, 0, 0.6);
   --radius: 12px;
   font-synthesis: none;
 }
@@ -33,7 +38,7 @@ html, body {
 .wrap { width: min(1440px, 96vw); margin: 0 auto; }
 
 .site-header {
-  background: linear-gradient(180deg, #f7ecd3 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, var(--panel-2) 0%, var(--bg) 100%);
   border-bottom: 1px solid var(--border);
   padding: 32px 0 24px;
 }
@@ -52,7 +57,7 @@ html, body {
   transition: all 0.15s ease;
 }
 .tab:hover { color: var(--text); border-color: var(--border-hover); }
-.tab.active { color: #2f6e34; border-color: var(--green); background: rgba(79,157,86,0.12); }
+.tab.active { color: var(--green-soft); border-color: var(--green); background: rgba(var(--green-rgb),0.16); }
 
 .scanner-intro { color: var(--muted); font-size: 0.95rem; margin: 20px 0 6px; }
 .scanner-intro strong { color: var(--text); }
@@ -70,9 +75,9 @@ html, body {
 #exchange-filter:focus { border-color: var(--accent); }
 
 .banner {
-  background: #fdf0d2;
-  color: #8a5a12;
-  border-bottom: 1px solid #f0d79a;
+  background: var(--panel-2);
+  color: var(--yellow);
+  border-bottom: 1px solid var(--border);
   text-align: center;
   padding: 10px 16px;
   font-size: 0.9rem;
@@ -125,7 +130,7 @@ html, body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;
-  box-shadow: 0 14px 34px rgba(90, 66, 20, 0.22);
+  box-shadow: 0 14px 34px var(--shadow);
 }
 .filter-head {
   display: grid;
@@ -190,7 +195,7 @@ html, body {
   transition: all 0.15s ease;
 }
 .chip:hover { color: var(--text); border-color: var(--border-hover); }
-.chip.active { background: rgba(79,157,86,0.14); color: #2f6e34; border-color: var(--green); }
+.chip.active { background: rgba(var(--green-rgb),0.18); color: var(--green-soft); border-color: var(--green); }
 
 .summary {
   display: grid;
@@ -258,14 +263,14 @@ tbody tr:hover { background: var(--panel-2); }
 /* Login modal */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 100; padding: 16px;
-  background: rgba(42, 33, 25, 0.45);
+  background: var(--overlay);
   display: flex; align-items: center; justify-content: center;
 }
 .modal-backdrop.hidden { display: none; }
 .modal {
   background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
   padding: 20px; width: min(360px, 92vw);
-  box-shadow: 0 20px 50px rgba(90, 66, 20, 0.3);
+  box-shadow: 0 20px 50px var(--shadow);
 }
 .modal h3 { margin: 0 0 14px; }
 .modal input {
@@ -309,11 +314,11 @@ tbody tr:hover { background: var(--panel-2); }
   font-size: 0.78rem;
   font-weight: 600;
 }
-.pill-strong-buy { background: rgba(79,157,86,0.20); color: #2f7a3a; border: 1px solid rgba(79,157,86,0.55); }
-.pill-buy        { background: rgba(79,157,86,0.12); color: #3d8a46; border: 1px solid rgba(79,157,86,0.35); }
-.pill-hold       { background: rgba(224,150,46,0.16); color: #a9741a; border: 1px solid rgba(224,150,46,0.4); }
-.pill-sell       { background: rgba(207,90,68,0.12); color: #c0492f; border: 1px solid rgba(207,90,68,0.35); }
-.pill-strong-sell{ background: rgba(207,90,68,0.22); color: #b23a22; border: 1px solid rgba(207,90,68,0.55); }
+.pill-strong-buy { background: rgba(var(--green-rgb),0.22); color: var(--green-soft); border: 1px solid rgba(var(--green-rgb),0.55); }
+.pill-buy        { background: rgba(var(--green-rgb),0.14); color: var(--green); border: 1px solid rgba(var(--green-rgb),0.35); }
+.pill-hold       { background: rgba(var(--accent-rgb),0.18); color: var(--yellow); border: 1px solid rgba(var(--accent-rgb),0.4); }
+.pill-sell       { background: rgba(var(--red-rgb),0.14); color: var(--red); border: 1px solid rgba(var(--red-rgb),0.35); }
+.pill-strong-sell{ background: rgba(var(--red-rgb),0.24); color: var(--red); border: 1px solid rgba(var(--red-rgb),0.55); }
 .pill-no-data    { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
 
 .trend-bullish { color: var(--green); }
@@ -699,7 +704,7 @@ body { -webkit-tap-highlight-color: transparent; }
     max-height: 80vh;
     overflow-y: auto;
     border-radius: 16px 16px 0 0;
-    box-shadow: 0 -12px 34px rgba(90, 66, 20, 0.30);
+    box-shadow: 0 -12px 34px var(--shadow);
   }
 
   /* Summary as five compact tiles across. */
