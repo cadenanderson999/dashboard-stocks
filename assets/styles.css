@@ -1,22 +1,22 @@
 :root {
   /* "Buy Side Brunch" palette, dark mode: black background, warm tan
      borders/panels, champagne amber + egg-yolk orange + sage green accents. */
-  --bg: #15100b;             /* near-black warm background */
-  --panel: #241c14;          /* card panel */
-  --panel-2: #2f251a;        /* tinted header cells / hover */
-  --border: #46381f;         /* warm tan border */
-  --border-hover: #5c4a2a;   /* lighter tan on hover */
-  --text: #f4ead9;           /* warm off-white */
-  --muted: #baa584;          /* muted tan */
-  --accent: #e0962e;         /* champagne amber (brand) */
-  --accent-2: #e8873a;       /* egg-yolk orange */
-  --green: #6cc172;          /* sage green — positive / buy */
-  --green-soft: #8ed393;     /* lighter green */
-  --red: #e2705a;            /* warm red — negative / sell */
-  --yellow: #d1a13a;         /* deep gold — readable on black */
-  --accent-rgb: 224, 150, 46;
-  --green-rgb: 108, 193, 114;
-  --red-rgb: 226, 112, 90;
+  --bg: #000000;             /* true black background */
+  --panel: #131313;          /* card panel */
+  --panel-2: #1c1c1c;        /* tinted header cells / hover */
+  --border: #34302a;         /* warm neutral border */
+  --border-hover: #48423a;   /* lighter border on hover */
+  --text: #fbfaf7;           /* near-white */
+  --muted: #9a958a;          /* muted warm gray */
+  --accent: #ffb020;         /* champagne amber (brand) */
+  --accent-2: #ff7a1a;       /* egg-yolk orange */
+  --green: #45d968;          /* sage green — positive / buy */
+  --green-soft: #6ee98c;     /* lighter green */
+  --red: #ff5c45;            /* warm red — negative / sell */
+  --yellow: #ffc247;         /* deep gold — readable on black */
+  --accent-rgb: 255, 176, 32;
+  --green-rgb: 69, 217, 104;
+  --red-rgb: 255, 92, 69;
   --shadow: rgba(0, 0, 0, 0.5);
   --overlay: rgba(0, 0, 0, 0.6);
   --radius: 12px;
