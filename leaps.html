@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>LEAP Calls — Buy Side Signals</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#faf3e4" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Buy Side Signals" />
+  <meta name="description"
+        content="Stocks that screen well for long-dated (LEAP) call options, with suggested contracts by delta, breakeven and open interest." />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1><a href="index.html" class="home-link">Buy Side Signals</a></h1>
+      <div id="auth-area" class="auth-area"></div>
+      <nav class="tabs" aria-label="Pages">
+        <a class="tab" href="index.html">Signals</a>
+        <a class="tab active" href="leaps.html">LEAP Calls</a>
+      </nav>
+    </div>
+  </header>
+
+  <div id="sample-banner" class="banner hidden">
+    ⚠️ Showing <strong>sample data</strong> (not real prices or option chains).
+    Live data appears once the scheduled GitHub Action runs.
+  </div>
+  <div id="chain-banner" class="banner hidden">
+    ⚠️ Option chains could not be fetched on the last run — candidates are shown
+    without contract suggestions.
+  </div>
+
+  <main class="wrap">
+    <p class="scanner-intro">
+      <strong>LEAP calls</strong> are call options with a year or more to expiry — a
+      leveraged, defined-risk way to own a strong stock's next 1–2 years. This
+      screen scores every ticker 0–100 on a <strong>rising long-term trend</strong>,
+      <strong>relative strength</strong>, <strong>fundamentals</strong>,
+      <strong>low volatility</strong> (cheaper premium), <strong>liquidity</strong> and an
+      <strong>unextended entry</strong>, then suggests contracts from the live chain by
+      delta: <em>stock replacement</em> (Δ≈0.80), <em>balanced</em> (Δ≈0.65) and
+      <em>aggressive</em> (Δ≈0.50).
+    </p>
+
+    <section class="controls">
+      <input id="search" type="search" placeholder="Search ticker…"
+             autocomplete="off" aria-label="Search ticker" />
+      <select id="sector-filter" aria-label="Filter by sector"></select>
+      <div class="filters" id="rating-filters" role="group" aria-label="Filter by LEAP rating">
+        <button class="chip active" data-filter="all">All</button>
+        <button class="chip" data-filter="LEAP Buy">LEAP Buy</button>
+        <button class="chip" data-filter="Watch">Watch</button>
+      </div>
+      <div class="sort-control">
+        <label for="sort-key">Sort by</label>
+        <select id="sort-key" aria-label="Sort by metric"></select>
+        <button id="sort-dir" class="chip" title="Toggle ascending / descending">↓ Desc</button>
+      </div>
+    </section>
+
+    <section class="summary" id="summary"><!-- filled by JS --></section>
+    <p id="result-count" class="result-count"></p>
+
+    <div id="leap-list" class="leap-list"><p class="empty">Loading…</p></div>
+    <p id="empty-state" class="empty hidden">No candidates match your filters.</p>
+  </main>
+
+  <footer class="site-footer wrap">
+    <p>
+      Last updated: <span id="updated-at">—</span> · Chains from Yahoo Finance;
+      deltas are Black-Scholes estimates from each contract's implied volatility.
+    </p>
+    <p class="disclaimer">
+      <strong>Not financial advice.</strong> Options can expire worthless; a LEAP
+      call can lose 100% of the premium. Mechanical screen for educational
+      purposes only. Do your own research.
+    </p>
+  </footer>
+
+  <script src="assets/supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/account.js"></script>
+  <script src="assets/leaps.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () =>
+        navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
+  </script>
+</body>
+</html>

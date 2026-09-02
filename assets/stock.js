@@ -11,6 +11,7 @@ const RATING_CLASS = {
 
 const params = new URLSearchParams(location.search);
 const SYMBOL = (params.get("symbol") || "").toUpperCase();
+let LEAP = null; // this symbol's LEAP candidate record, if any
 
 // --- formatting helpers --------------------------------------------------- //
 function fmt(n, digits = 2) {
@@ -66,15 +67,17 @@ async function load() {
     return;
   }
 
-  const [signals, scan, details] = await Promise.all([
+  const [signals, scan, details, leaps] = await Promise.all([
     fetchJson("data/stocks.json"),
     fetchJson("data/rvol_scan.json"),
     fetchJson("data/details.json"),
+    fetchJson("data/leaps.json"),
   ]);
 
   const find = (d) => d && d.stocks && d.stocks.find((s) => s.symbol === SYMBOL);
   const signal = find(signals) || find(scan);
   const detail = details && details.stocks ? details.stocks[SYMBOL] : null;
+  LEAP = leaps && leaps.candidates ? leaps.candidates.find((c) => c.symbol === SYMBOL) : null;
 
   const isSample =
     (signals && signals.is_sample) || (details && details.is_sample);
@@ -311,10 +314,93 @@ function earningsSection(d) {
     <section class="earnings-section">
       <h3>Earnings${next ? ` · <span class="next-earn">Next report: ${fmtDate(next)}</span>` : ""}</h3>
       ${hist.length ? `<div class="table-scroll"><table class="mini-table">
-        <thead><tr><th>Quarter (period end)</th><th class="num">Revenue</th>
-          <th class="num">Net income</th><th class="num">EPS (diluted)</th></tr></thead>
+        <thead><tr><th>Quarter</th><th class="num">Revenue</th>
+          <th class="num">Net income</th><th class="num" title="Diluted EPS">EPS</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`
         : `<p class="empty">No earnings history available.</p>`}
+    </section>`;
+}
+
+// Signed sub-score bar (centre = 0). ``max`` is the bar's half-width.
+function scoreBar(label, value, min, max, note) {
+  if (value == null) return "";
+  const span = Math.max(Math.abs(min), Math.abs(max));
+  const w = Math.min(100, Math.abs(value) / span * 50);
+  const cls = value > 0 ? "pos" : value < 0 ? "neg" : "";
+  const left = value >= 0 ? 50 : 50 - w;
+  return `
+    <div class="sbar">
+      <div class="sbar-l">${label}<span class="muted">${note ? " · " + note : ""}</span></div>
+      <div class="sbar-track"><div class="sbar-mid"></div>
+        <div class="sbar-fill ${cls}" style="left:${left}%;width:${w}%"></div></div>
+      <div class="sbar-v ${cls}">${value > 0 ? "+" : ""}${value}<span class="muted">/${value >= 0 ? max : min}</span></div>
+    </div>`;
+}
+
+function breakdownCard(s) {
+  if (s.score == null) return "";
+  const setups = (s.setups || []);
+  return `
+    <section class="stat-card">
+      <h3>Strategy breakdown</h3>
+      ${scoreBar("Trend", s.trend_score, -35, 35, "SMA stack, 200-day slope, 52-wk low")}
+      ${scoreBar("Momentum", s.momentum_score, -35, 35, "RS rank, 12-1 momentum, highs")}
+      ${scoreBar("Timing", s.timing_score, -8, 12, "pullbacks vs bear bounces")}
+      ${scoreBar("Volume", s.volume_score, -8, 8, "up/down volume, OBV")}
+      <div class="setups">${setups.length
+        ? setups.map((x) => `<span class="setup-chip ${SETUP_CLASS[x] || ""}">${x}</span>`).join("")
+        : `<span class="muted">No named setup active.</span>`}</div>
+    </section>`;
+}
+
+const SETUP_CLASS = {
+  "Trend Template": "good", "Golden Cross": "good", "Momentum Leader": "good",
+  "Pullback Buy": "good", "Breakout": "good", "52-Week High": "good",
+  "Accumulation": "good", "MACD Bull Cross": "good",
+  "Death Cross": "bad", "Bear Bounce": "bad", "Distribution": "bad",
+  "MACD Bear Cross": "bad", "Extended": "warn",
+};
+
+function leapCard(s, leap) {
+  if (!leap) {
+    const why = s.rating && ["Buy", "Strong Buy"].includes(s.rating)
+      ? "screens below the LEAP threshold (needs a rising 200-day trend, RS ≥ 60, supportive fundamentals and moderate volatility)"
+      : "needs an uptrend and a Buy-or-better rating to qualify";
+    return `<section class="stat-card"><h3>LEAP calls</h3>
+      <p class="muted small">Not a LEAP candidate — ${why}.
+      <a href="leaps.html">See the LEAP Calls page</a>.</p></section>`;
+  }
+  const cls = leap.leap_rating === "LEAP Buy" ? "pill-strong-buy" : "pill-hold";
+  const checks = Object.entries(leap.checks || {}).map(([k, c]) =>
+    `<div class="stat"><span class="stat-l">${titleCase(k)} <span class="muted">${c.detail}</span></span>` +
+    `<span class="stat-v">${c.points}/${c.max}</span></div>`).join("");
+  const rows = (leap.contracts || []).map((c) => `
+    <tr>
+      <td><strong>${c.role}</strong></td>
+      <td data-label="Expiry">${fmtDate(c.expiry)} <span class="muted">(${c.dte}d)</span></td>
+      <td class="num" data-label="Strike">$${fmt(c.strike, c.strike % 1 ? 2 : 0)}</td>
+      <td class="num" data-label="Mid (bid–ask)">$${fmt(c.mid)} <span class="muted">${fmt(c.bid)}–${fmt(c.ask)}</span></td>
+      <td class="num" data-label="Delta">${fmt(c.delta)}</td>
+      <td class="num" data-label="IV">${fmt(c.iv, 0)}%</td>
+      <td class="num" data-label="Open int.">${c.oi ?? "—"}</td>
+      <td class="num" data-label="Breakeven">${pct(c.breakeven_pct, 1)}</td>
+      <td class="num" data-label="Leverage">${fmt(c.leverage, 1)}×</td>
+    </tr>`).join("");
+  return `
+    <section class="stat-card leap-card">
+      <h3>LEAP calls · <span class="pill ${cls}">${leap.leap_rating}</span>
+        <span class="score-num">${leap.leap_score}/100</span></h3>
+      ${checks}
+      ${rows ? `<div class="table-scroll mini-scroll"><table class="mini-table contracts">
+        <thead><tr><th>Style</th><th>Expiry</th><th class="num">Strike</th>
+          <th class="num">Mid (bid–ask)</th><th class="num">Δ</th><th class="num">IV</th>
+          <th class="num">OI</th><th class="num">Breakeven</th><th class="num">Lev.</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`
+        : `<p class="muted small">${leap.chain_status === "no_leaps"
+          ? "No expiries ≥ 1 year out are listed for this ticker."
+          : leap.chain_status === "not_fetched" ? "Option chain not fetched this run (outside the top candidates)."
+          : "Option chain unavailable this run."}</p>`}
+      <p class="muted small"><a href="leaps.html#${encodeURIComponent(s.symbol)}">Full LEAP write-up →</a></p>
     </section>`;
 }
 
@@ -365,13 +451,24 @@ function render(el, s, d) {
 
     <div class="stat-grid">
       ${statCard("Signal", [
-        ["Rating", `<span class="pill ${ratingCls}">${s.rating || "No Data"}</span>`],
-        ["Trend (EMA 50 / 200)", `<span class="${trendCls}">${s.trend || "—"}</span>`],
-        ["RSI (14)", fmt(s.rsi, 1)],
-        ["Momentum", s.momentum || "—"],
-        ["EMA 50", fmtPrice(s.ema50)],
-        ["EMA 200", fmtPrice(s.ema200)],
+        ["Rating", `<span class="pill ${ratingCls}">${s.rating || "No Data"}</span>` +
+          (s.score != null ? ` <span class="score-num ${s.score > 0 ? "pos" : s.score < 0 ? "neg" : ""}">${s.score > 0 ? "+" : ""}${s.score}</span>` : "")],
+        ["Trend (50 / 200 SMA)", `<span class="${trendCls}">${s.trend || "—"}</span>`],
+        ["Trend Template", s.tt_pass != null ? `${s.tt_pass} / 8 criteria` : "—"],
+        ["RS rank (1–99)", s.rs_rank != null ? `<span class="${s.rs_rank >= 80 ? "pos" : s.rs_rank <= 20 ? "neg" : ""}">${s.rs_rank}</span>` : "—"],
+        ["Timing", s.timing || "—"],
+        ["RSI (14) / RSI (2)", `${fmt(s.rsi, 1)} / ${fmt(s.rsi2, 1)}`],
+        ["MACD (12,26,9)", s.macd_label ? `${s.macd_label}${s.macd_hist != null ? ` · hist ${fmt(s.macd_hist, 2)}` : ""}` : "—"],
+        ["ADX (14)", s.adx != null ? `${fmt(s.adx, 0)} ${s.adx >= 25 ? "· trending" : "· weak trend"}` : "—"],
+        ["SMA 50 / 150 / 200", `${fmtPrice(s.sma50)} / ${fmtPrice(s.sma150)} / ${fmtPrice(s.sma200)}` +
+          (s.sma200_rising != null ? ` <span class="${s.sma200_rising ? "pos" : "neg"}">(200 ${s.sma200_rising ? "rising" : "falling"})</span>` : "")],
+        ["52-wk high / low", `${fmtPrice(s.high52)} / ${fmtPrice(s.low52)}` +
+          (s.pct_off_high != null ? ` <span class="muted">(${pct(s.pct_off_high, 1)} from high)</span>` : "")],
+        ["ATR (14) · 2×ATR stop", s.atr != null ? `$${fmt(s.atr)} (${fmt(s.atr_pct, 1)}%) · ${fmtPrice(s.stop_2atr)}` : "—"],
+        ["Returns 1m / 3m / 6m", `${pct(s.ret_1m, 1)} / ${pct(s.ret_3m, 1)} / ${pct(s.ret_6m, 1)}`],
       ])}
+      ${breakdownCard(s)}
+      ${leapCard(s, LEAP)}
       ${statCard("Price & range", [
         ["Price", fmtPrice(s.price), chgCls],
         ["Day change", pct(chg), chgCls],
@@ -391,6 +488,7 @@ function render(el, s, d) {
         ["Dividend / yield", d.dividend_rate ? `$${fmt(d.dividend_rate)} · ${divYield}` : "—"],
       ])}
       ${statCard("Volume", [
+        ["Up / down volume (50d)", s.udv_ratio != null ? `${fmt(s.udv_ratio)}× <span class="muted">${s.udv_ratio >= 1.3 ? "accumulation" : s.udv_ratio <= 0.77 ? "distribution" : "neutral"}</span>` : "—"],
         ["RVOL today", s.rvol_today != null ? fmt(s.rvol_today) + "×" : "—"],
         ["RVOL (30-day avg)", s.rvol_mean != null ? fmt(s.rvol_mean) + "×" : "—"],
         ["Surge days (30d)", s.rvol_high_days != null ? s.rvol_high_days : "—"],

@@ -1,7 +1,7 @@
 {
   "name": "Buy Side Signals",
   "short_name": "Buy Side",
-  "description": "High-volume stock watchlist with Buy/Sell signals from EMA, RSI and relative volume.",
+  "description": "Stock watchlist with multi-factor Buy/Sell signals, LEAP call ideas and relative volume.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -2,6 +2,7 @@
 
 // State
 let STOCKS = [];
+let LEAPS = {};       // symbol -> LEAP rating (from data/leaps.json)
 let filterRating = "all";
 let filterSector = "all";
 let filterWatchlist = false;
@@ -18,11 +19,10 @@ const SORT_OPTIONS = [
   ["change_pct", "Day %"],
   ["market_cap", "Market Cap"],
   ["pe", "P/E"],
-  ["ema50", "EMA 50"],
-  ["ema200", "EMA 200"],
   ["trend", "Trend"],
+  ["rs_rank", "RS rank"],
   ["rsi", "RSI"],
-  ["momentum", "Momentum"],
+  ["timing", "Timing"],
   ["rvol_mean", "RVOL 30d"],
   ["rvol_high_days", "Surge Days"],
   ["sector", "Sector"],
@@ -30,7 +30,7 @@ const SORT_OPTIONS = [
 ];
 
 // Columns sorted as text default to ascending; everything else descending.
-const TEXT_KEYS = ["symbol", "trend", "momentum", "sector"];
+const TEXT_KEYS = ["symbol", "trend", "timing", "sector"];
 
 const RATING_CLASS = {
   "Strong Buy": "pill-strong-buy",
@@ -42,8 +42,18 @@ const RATING_CLASS = {
 };
 
 // --- Load data ------------------------------------------------------------ //
+async function loadLeaps() {
+  try {
+    const res = await fetch("data/leaps.json", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    (data.candidates || []).forEach((c) => { LEAPS[c.symbol] = c.leap_rating; });
+  } catch { /* LEAP badges are optional */ }
+}
+
 async function load() {
   try {
+    await loadLeaps();
     const res = await fetch("data/stocks.json", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -61,7 +71,7 @@ async function load() {
     render();
   } catch (err) {
     document.getElementById("stock-body").innerHTML =
-      `<tr><td colspan="14" class="empty">Could not load data: ${err.message}</td></tr>`;
+      `<tr><td colspan="13" class="empty">Could not load data: ${err.message}</td></tr>`;
   }
 }
 
@@ -83,6 +93,25 @@ function pill(rating) {
   const cls = RATING_CLASS[rating] || "pill-no-data";
   return `<span class="pill ${cls}">${rating}</span>`;
 }
+
+function scoreNum(score) {
+  if (score === null || score === undefined) return "";
+  const cls = score > 0 ? "pos" : score < 0 ? "neg" : "";
+  return `<span class="score-num ${cls}">${score > 0 ? "+" : ""}${score}</span>`;
+}
+
+function leapBadge(sym) {
+  const r = LEAPS[sym];
+  if (!r) return "";
+  const cls = r === "LEAP Buy" ? "leap-buy" : "leap-watch";
+  return `<a class="leap-badge ${cls}" href="leaps.html#${encodeURIComponent(sym)}" ` +
+    `title="${r === "LEAP Buy" ? "LEAP call candidate — see suggested contracts" : "On the LEAP watch list"}">LEAP</a>`;
+}
+
+const TIMING_CLASS = {
+  Pullback: "timing-pullback", Breakout: "timing-breakout", "At Highs": "timing-highs",
+  Extended: "timing-extended", "Bear Bounce": "timing-bear", Oversold: "timing-bear",
+};
 
 function compare(a, b) {
   let av = a[sortKey];
@@ -136,9 +165,10 @@ function render() {
         ? "—"
         : `${chg > 0 ? "+" : ""}${fmt(chg)}%`;
       const trendCls = s.trend === "Bullish" ? "trend-bullish"
-        : s.trend === "Bearish" ? "trend-bearish" : "";
-      const momCls = s.momentum === "Oversold" ? "mom-oversold"
-        : s.momentum === "Overbought" ? "mom-overbought" : "mom-neutral";
+        : s.trend === "Bearish" ? "trend-bearish" : "trend-mixed";
+      const rsCls = s.rs_rank >= 80 ? "rs-strong" : s.rs_rank <= 20 ? "rs-weak" : "";
+      const timingCls = TIMING_CLASS[s.timing] || "mom-neutral";
+      const setups = (s.setups || []).join(" · ");
       // Highlight elevated relative volume.
       const rvolCls = s.rvol_mean >= 1.5 ? "rvol-high"
         : s.rvol_mean >= 1.15 ? "rvol-mid" : "";
@@ -157,15 +187,14 @@ function render() {
           <td class="num ${chgCls}" data-label="Day %">${chgStr}</td>
           <td class="num" data-label="Mkt Cap">${fmtMarketCap(s.market_cap)}</td>
           <td class="num" data-label="P/E">${fmt(s.pe, 1)}</td>
-          <td class="num" data-label="EMA 50">${fmt(s.ema50)}</td>
-          <td class="num" data-label="EMA 200">${fmt(s.ema200)}</td>
           <td class="${trendCls}" data-label="Trend">${s.trend}</td>
+          <td class="num ${rsCls}" data-label="RS">${s.rs_rank ?? "—"}</td>
           <td class="num" data-label="RSI">${fmt(s.rsi, 1)}</td>
-          <td class="${momCls}" data-label="Momentum">${s.momentum}</td>
+          <td class="${timingCls}" data-label="Timing">${s.timing || "—"}</td>
           <td class="num ${rvolCls}" data-label="RVOL 30d">${fmt(s.rvol_mean)}×</td>
           <td class="num ${surgeCls}" data-label="Surge">${surgeStr}</td>
           <td class="sector-cell" data-label="Sector">${s.sector || "—"}</td>
-          <td data-label="Rating">${pill(s.rating)}</td>
+          <td data-label="Rating" title="${setups}">${pill(s.rating)}${scoreNum(s.score)}${leapBadge(s.symbol)}</td>
         </tr>`;
     })
     .join("");
@@ -315,8 +344,8 @@ if (window.Account && Account.ready) {
 FILTER = RangeFilters.create({
   button: document.getElementById("filter-btn"),
   panel: document.getElementById("filter-panel"),
-  keys: ["price", "change_pct", "market_cap", "pe", "ema50", "ema200",
-    "rsi", "rvol_mean", "rvol_high_days"],
+  keys: ["price", "change_pct", "market_cap", "pe", "score", "rs_rank",
+    "rsi", "hv60", "rvol_mean", "rvol_high_days"],
   onChange: render,
 });
 

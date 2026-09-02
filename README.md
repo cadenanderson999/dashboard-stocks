@@ -1,12 +1,16 @@
 # 📈 Stock Signals — Robinhood 100 + S&P 500
 
 A free, static website covering the **Robinhood Top 100** *and* the **S&P 500**
-(~500+ unique tickers), assigning each one a **Buy / Sell rating** derived from
-two classic technical indicators:
+(~500+ unique tickers), assigning each one a **Buy / Sell rating** from a
+backtested, multi-factor composite of four strategy families:
 
-- **50 / 200 EMA** — the trend (golden cross vs. death cross)
-- **Daily RSI(14)** — momentum (overbought vs. oversold)
+- **Trend** — Minervini's *Trend Template* (price > 50 > 150 > 200-day SMA,
+  rising 200 SMA, ≥ 30% above the 52-week low, within 25% of the high)
+- **Momentum** — cross-sectional **relative-strength rank** (1–99) + 12-1 momentum
+- **Timing** — *pullback-in-uptrend* entries (RSI 14 / RSI 2), bear-bounce penalty
+- **Volume** — accumulation vs. distribution (up/down volume, OBV)
 
+A second page screens for **LEAP call options** and suggests specific contracts.
 It also reports **relative volume (RVOL)** so you can spot unusual activity, and
 tags every ticker by **list** (Robinhood 100 / S&P 500) and **GICS sector** so
 you can slice the universe.
@@ -15,27 +19,106 @@ Data is fetched from Yahoo Finance (free, no API key) by a Python script, and a
 scheduled **GitHub Action** refreshes it every weekday and deploys the site to
 **GitHub Pages**.
 
-> ⚠️ **Not financial advice.** These are mechanical signals from two indicators,
-> for educational purposes only.
+> ⚠️ **Not financial advice.** These are mechanical signals from technical
+> indicators, for educational purposes only. Options can expire worthless.
 
 ---
 
 ## How the rating works
 
-For each ticker, on the **daily** timeframe:
+Every ticker gets a **composite score from about −90 to +90**, the sum of four
+signed sub-scores computed on daily data (`scripts/strategies.py`):
 
-| Trend (EMA 50 vs 200) | RSI(14) | Rating | Why |
-|---|---|---|---|
-| Bullish (50 > 200) | < 30 (oversold) | **Strong Buy** | Uptrend + oversold dip |
-| Bullish | 30–70 | **Buy** | Healthy uptrend |
-| Bullish | > 70 (overbought) | **Hold** | Uptrend but extended |
-| Bearish (50 < 200) | > 70 (overbought) | **Strong Sell** | Downtrend + overbought bounce |
-| Bearish | 30–70 | **Sell** | Weak downtrend |
-| Bearish | < 30 (oversold) | **Hold** | Downtrend but possible bounce |
+| Family | Range | What moves it |
+|---|---|---|
+| **Trend** | ±35 | price vs 200 SMA (±10), 50 > 200 SMA (±8), 200 SMA rising over the last month (±6), 50 > 150 > 200 stack (+6 / bearish stack −8), ≥ 30% above the 52-week low (+5) |
+| **Momentum** | ±35 | **RS rank** 1–99 scaled to ±25, 12-1 momentum > 30% (+5) / < −10% (−5), within 2% of the 52-week high (+5) |
+| **Timing** | −8..+12 | *in an uptrend*: RSI(14) < 30 (+12), RSI(14) < 45 (+8, +4 more if RSI(2) < 10), RSI(2) < 10 (+4). *In a downtrend*: RSI(14) > 65 "bear bounce" (−8), RSI(14) < 25 (−6) |
+| **Volume** | ±8 | 50-day up-volume / down-volume ≥ 1.3 (+5) / ≤ 0.77 (−5); OBV above its 20-day average (±3) |
 
-Indicator parameters live at the top of `scripts/generate_data.py`
-(`EMA_FAST`, `EMA_SLOW`, `RSI_PERIOD`) and the ticker lists are in
-`scripts/tickers.py` — edit either to taste.
+| Score | Rating |
+|---|---|
+| ≥ 60 | **Strong Buy** |
+| 25 – 59 | **Buy** |
+| −19 – 24 | **Hold** |
+| −49 – −20 | **Sell** |
+| ≤ −50 | **Strong Sell** |
+
+The **RS rank** is IBD-style: `2·r(3m) + r(6m) + r(9m) + r(12m)`, percentile-ranked
+across the whole universe each run, so it is *relative* strength rather than
+absolute. The Timing column labels the entry (Pullback, At Highs, Breakout,
+Extended, Bear Bounce, Oversold) and each row's rating tooltip lists the named
+setups that fired (Trend Template, Momentum Leader, Pullback Buy, Golden /
+Death Cross, MACD cross, Accumulation / Distribution…). The detail page shows
+the four sub-scores as bars plus MACD, ADX, ATR and a 2×ATR stop.
+
+Thresholds and weights live at the top of `scripts/strategies.py`.
+
+### Why these strategies (backtest)
+
+`scripts/backtest.py` scores every ticker each month with the exact same code
+the site uses and records the *forward* 1- and 3-month returns. On five years
+of daily S&P 500 data (Feb 2013 – Feb 2018, 505 tickers, 45 monthly rebalances)
+the composite ranks stocks correctly at every tier, while the old EMA-50/200 +
+RSI table put 62% of names in "Buy" and its "Strong Buy" tier actually lagged:
+
+| Rating tier | Composite (new): 3-mo excess vs. universe | Legacy: 3-mo excess vs. universe |
+|---|---|---|
+| Strong Buy | **+0.72%** (CAGR 13.1%, Sharpe 1.13) | −0.67% (CAGR 7.0%, Sharpe 0.60) |
+| Buy | +0.05% | +0.18% |
+| Hold | +0.05% | +0.45% |
+| Sell | −0.24% | −0.37% |
+| Strong Sell | **−0.72%** (CAGR 5.6%, max DD −24%) | −2.21% (only 1% of names) |
+
+(Equal-weight universe: CAGR 10.1%, Sharpe 0.97.) Per-component results drove
+the weights: RS rank ≥ 80 (+0.5% / 3 mo, +0.9% / 6 mo) and pullbacks inside
+uptrends (RSI 14 < 45: 63% one-month hit rate) had the clearest edge; MACD
+state, ADX, volume breakouts and "over-extension" penalties had none, so they
+are shown as labels but don't move the score. Caveats: the sample is a bull
+market with survivorship bias, so absolute returns are flattering — treat the
+*ranking* between tiers as the evidence, not the CAGR.
+
+Run it yourself — locally or via the **Backtest rating strategies** GitHub
+Action (Actions tab → Run workflow), which downloads the live universe:
+
+```bash
+python scripts/backtest.py --live --years 6            # Yahoo Finance
+python scripts/backtest.py --csv all_stocks_5yr.csv     # any long-format OHLCV CSV
+python scripts/backtest.py --sample                     # smoke test, no network
+```
+
+## LEAP calls (second tab)
+
+The **LEAP Calls** page (`leaps.html`) screens for stocks that suit a
+long-dated call option (≥ 1 year to expiry) and suggests contracts. Each ticker
+is scored 0–100 by `strategies.leap_score`:
+
+| Check | Points | Looks at |
+|---|---|---|
+| Trend | 30 | above a **rising** 200-day SMA, Trend Template criteria passed |
+| Momentum | 20 | RS rank |
+| Fundamentals | 20 | analyst mean-target upside, YoY revenue growth, profitability / forward P/E |
+| Volatility | 15 | 60-day realised vol (lower = cheaper premium, steadier path) |
+| Liquidity | 10 | market cap (deep, tight LEAP markets) |
+| Timing | 5 | unextended entry (pullback preferred) |
+
+**LEAP Buy** needs ≥ 70 *and* the hard gates (uptrend, RS ≥ 60, a Buy-or-better
+rating, cap ≥ $2B, vol ≤ 70%); ≥ 55 in an uptrend is **Watch**. For candidates,
+`scripts/generate_leaps.py` pulls the option chain from Yahoo, keeps expiries
+≥ 365 days out (nearest + farthest), computes a Black-Scholes delta from each
+contract's implied volatility, and suggests three calls per expiry:
+
+- **Stock replacement** (Δ ≈ 0.80) — deep in-the-money, least time decay
+- **Balanced** (Δ ≈ 0.65)
+- **Aggressive** (Δ ≈ 0.50) — at-the-money, maximum leverage
+
+with bid/ask/mid, cost per contract, IV, open interest, breakeven (price and %),
+time-value cost and leverage. Contracts with open interest < 25 or a bid/ask
+spread > 20% of mid are flagged. The page also shows LEAP-ATM implied vol
+against realised vol (a ratio well above 1 means the options are pricey).
+Candidates get a **LEAP** badge on the Signals table and a card on their detail
+page. Tunables (`LEAP_MIN_DTE`, `MAX_CHAINS`, `RISK_FREE`, …) are at the top of
+`scripts/generate_leaps.py`; output is `data/leaps.json`.
 
 ## The stock universe
 
@@ -138,25 +221,30 @@ bounded 0–100, Surge Days 0–30, and **Market Cap accepts shorthand like `1M`
 ```
 dashboard-stocks/
 ├── index.html                 # the dashboard page (Signals tab)
-├── scanner.html               # the Volume Screener page
+├── leaps.html                 # LEAP call screen + suggested contracts
 ├── stock.html                 # per-stock detail page (?symbol=XXX)
 ├── assets/
 │   ├── styles.css             # styling (shared)
 │   ├── filters.js             # shared numeric range-filter panel
-│   ├── app.js                 # dashboard: loads data/stocks.json
-│   ├── scanner.js             # screener: loads data/rvol_scan.json
-│   └── stock.js               # detail page: loads data/details.json
+│   ├── app.js                 # dashboard: loads data/stocks.json (+ leaps.json badges)
+│   ├── leaps.js               # LEAP page: loads data/leaps.json
+│   └── stock.js               # detail page: loads details.json + leaps.json
 ├── data/
 │   ├── stocks.json            # generated indicators + ratings
+│   ├── leaps.json             # generated LEAP candidates + contracts
 │   ├── rvol_scan.json         # generated RVOL > 2.0 scan results
-│   └── details.json           # extended per-stock fundamentals + closes
+│   └── details.json           # extended per-stock fundamentals
 ├── scripts/
 │   ├── tickers.py             # Robinhood list + S&P 500 fallback
+│   ├── strategies.py          # indicators, composite rating, LEAP screen
 │   ├── generate_data.py       # fetches prices, computes signals + details
-│   └── generate_rvol_scan.py  # market-wide RVOL scan
+│   ├── generate_leaps.py      # LEAP screen + option-chain contract picker
+│   ├── generate_rvol_scan.py  # market-wide RVOL scan
+│   └── backtest.py            # compares the strategies on forward returns
 ├── requirements.txt
 └── .github/workflows/
-    └── update-and-deploy.yml  # daily refresh + Pages deploy
+    ├── update-and-deploy.yml  # daily refresh + Pages deploy
+    └── backtest.yml           # on-demand strategy backtest
 ```
 
 ---
@@ -170,10 +258,11 @@ python3 -m venv .venv && source .venv/bin/activate
 # 2. Install deps
 pip install -r requirements.txt
 
-# 3. Fetch live data and compute signals
+# 3. Fetch live data and compute signals, then the LEAP screen
 python scripts/generate_data.py
+python scripts/generate_leaps.py
 #    ...or, with no internet, generate placeholder data:
-python scripts/generate_data.py --sample
+python scripts/generate_data.py --sample && python scripts/generate_leaps.py --sample
 
 # 4. Serve the site (any static server works)
 python -m http.server 8000
