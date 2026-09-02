@@ -130,15 +130,15 @@ function contractsTable(c) {
     return sep + `
       <tr class="${k.liquid ? "" : "illiquid"}" title="${esc(k.why || "")}">
         <td><strong>${esc(k.role)}</strong><span class="muted small"> Δ≈${k.target_delta}</span></td>
-        <td class="num">$${fmt(k.strike, k.strike % 1 ? 2 : 0)}</td>
-        <td class="num">$${fmt(k.mid)}<span class="muted small"> ${fmt(k.bid)}–${fmt(k.ask)}</span></td>
-        <td class="num">$${fmt(k.cost, 0)}</td>
-        <td class="num">${fmt(k.delta)}</td>
-        <td class="num">${fmt(k.iv, 0)}%</td>
-        <td class="num">${k.oi ?? "—"}${k.liquid ? "" : ' <span class="neg" title="Low open interest or wide spread">!</span>'}</td>
-        <td class="num">$${fmt(k.breakeven)}<span class="muted small"> ${pct(k.breakeven_pct)}</span></td>
-        <td class="num">${fmt(k.extrinsic_pct, 1)}%</td>
-        <td class="num">${fmt(k.leverage, 1)}×</td>
+        <td class="num" data-label="Strike">$${fmt(k.strike, k.strike % 1 ? 2 : 0)}</td>
+        <td class="num" data-label="Mid (bid–ask)">$${fmt(k.mid)}<span class="muted small"> ${fmt(k.bid)}–${fmt(k.ask)}</span></td>
+        <td class="num" data-label="Cost / contract">$${fmt(k.cost, 0)}</td>
+        <td class="num" data-label="Delta">${fmt(k.delta)}</td>
+        <td class="num" data-label="Implied vol">${fmt(k.iv, 0)}%</td>
+        <td class="num" data-label="Open interest">${k.oi ?? "—"}${k.liquid ? "" : ' <span class="neg" title="Low open interest or wide spread">!</span>'}</td>
+        <td class="num" data-label="Breakeven">$${fmt(k.breakeven)}<span class="muted small"> ${pct(k.breakeven_pct)}</span></td>
+        <td class="num" data-label="Time value">${fmt(k.extrinsic_pct, 1)}%</td>
+        <td class="num" data-label="Leverage">${fmt(k.leverage, 1)}×</td>
       </tr>`;
   }).join("");
   return `

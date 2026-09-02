@@ -350,7 +350,7 @@ tbody tr:hover { background: var(--panel-2); }
   font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; text-decoration: none;
   border: 1px solid var(--border);
 }
-.leap-badge.leap-buy { background: rgba(224,150,46,0.18); color: #9a5f0c; border-color: rgba(224,150,46,0.6); }
+.leap-badge.leap-buy { background: rgba(var(--accent-rgb),0.18); color: var(--accent); border-color: rgba(var(--accent-rgb),0.6); }
 .leap-badge.leap-watch { background: var(--panel-2); color: var(--muted); }
 .leap-badge:hover { border-color: var(--accent); color: var(--text); }
 
@@ -371,9 +371,9 @@ tbody tr:hover { background: var(--panel-2); }
   font-size: 0.72rem; font-weight: 600; padding: 3px 9px; border-radius: 999px;
   background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
 }
-.setup-chip.good { background: rgba(79,157,86,0.12); color: #2f7a3a; border-color: rgba(79,157,86,0.4); }
-.setup-chip.bad  { background: rgba(207,90,68,0.12); color: #b23a22; border-color: rgba(207,90,68,0.4); }
-.setup-chip.warn { background: rgba(224,150,46,0.14); color: #a9741a; border-color: rgba(224,150,46,0.4); }
+.setup-chip.good { background: rgba(var(--green-rgb),0.14); color: var(--green-soft); border-color: rgba(var(--green-rgb),0.4); }
+.setup-chip.bad  { background: rgba(var(--red-rgb),0.14); color: var(--red); border-color: rgba(var(--red-rgb),0.4); }
+.setup-chip.warn { background: rgba(var(--accent-rgb),0.16); color: var(--yellow); border-color: rgba(var(--accent-rgb),0.4); }
 .mini-scroll { margin-top: 10px; border-radius: 8px; }
 .leap-card h3 .pill { margin-left: 4px; vertical-align: middle; }
 
@@ -383,7 +383,7 @@ tbody tr:hover { background: var(--panel-2); }
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px 18px;
 }
-.leap-card-full:target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(224,150,46,0.18); }
+.leap-card-full:target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),0.25); }
 .leap-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .leap-head .stock-symbol { font-size: 1.5rem; }
 .leap-head .stock-symbol a { color: inherit; text-decoration: none; }
@@ -405,9 +405,63 @@ tbody tr:hover { background: var(--panel-2); }
 .contracts .exp-row td { background: var(--panel-2); color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .contracts tr.illiquid td { color: var(--muted); }
 @media (max-width: 700px) {
+  /* Belt-and-braces: nothing may widen the page. */
+  html, body { overflow-x: hidden; max-width: 100%; }
+  .stat-grid { grid-template-columns: 1fr; }
   .leap-body { grid-template-columns: 1fr; }
   .leap-card-full { padding: 14px; }
   #stock-table td[data-label="Rating"] .score-num { margin-left: 8px; }
+
+  /* Small data tables (earnings, LEAP contracts) must fit the card width. */
+  .mini-scroll, .earnings-section .table-scroll { overflow: hidden; }
+  .mini-table { font-size: 0.78rem; table-layout: auto; }
+  .mini-table th, .mini-table td { padding: 7px 5px; white-space: normal; }
+  .mini-table th { font-size: 0.7rem; }
+  .earnings-section h3 { line-height: 1.5; }
+  .earnings-section .next-earn { display: block; }
+
+  /* Contract tables become one card per contract. */
+  table.contracts, table.contracts tbody { display: block; width: 100%; }
+  table.contracts thead { display: none; }
+  table.contracts tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 2px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  table.contracts tr:last-child { border-bottom: none; }
+  table.contracts tr.exp-row { display: block; padding: 6px 0; }
+  table.contracts tr.exp-row td { display: block; background: none; padding: 0; text-align: left; }
+  table.contracts tr.exp-row td::before { content: none; }
+  table.contracts td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 0;
+    border: none;
+    text-align: right;
+    white-space: nowrap;
+    min-width: 0;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+  }
+  /* Secondary text (bid–ask range, days to expiry) drops under the value. */
+  table.contracts td > span.muted { flex-basis: 100%; text-align: right; font-size: 0.72rem; }
+  table.contracts td:first-child > span.muted { flex-basis: auto; }
+  table.contracts td::before {
+    white-space: nowrap;
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+  }
+  table.contracts td:first-child { grid-column: 1 / -1; justify-content: flex-start; text-align: left; }
+  table.contracts td:first-child::before { content: none; }
 }
 
 td .reason {
@@ -495,8 +549,8 @@ td .reason {
   border-bottom: 1px solid var(--border);
 }
 .stat:last-child { border-bottom: none; }
-.stat-l { color: var(--muted); font-size: 0.85rem; }
-.stat-v { font-weight: 600; font-size: 0.9rem; text-align: right; }
+.stat-l { color: var(--muted); font-size: 0.85rem; min-width: 0; }
+.stat-v { font-weight: 600; font-size: 0.9rem; text-align: right; min-width: 0; overflow-wrap: anywhere; }
 
 /* Analyst target range bar */
 .target-bar { position: relative; height: 8px; margin: 14px 0 6px; }
@@ -611,7 +665,7 @@ body { -webkit-tap-highlight-color: transparent; }
  * in a 2-column labelled grid, sector + rating full width. No H-scroll.
  * ------------------------------------------------------------------ */
 @media (max-width: 700px) {
-  .table-scroll { overflow: visible; border: none; background: transparent; border-radius: 0; }
+  .stock-scroll { overflow: visible; border: none; background: transparent; border-radius: 0; }
   #stock-table { display: block; }
   #stock-table thead { display: none; }
   #stock-table tbody { display: block; }

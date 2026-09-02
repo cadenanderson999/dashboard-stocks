@@ -314,8 +314,8 @@ function earningsSection(d) {
     <section class="earnings-section">
       <h3>Earnings${next ? ` · <span class="next-earn">Next report: ${fmtDate(next)}</span>` : ""}</h3>
       ${hist.length ? `<div class="table-scroll"><table class="mini-table">
-        <thead><tr><th>Quarter (period end)</th><th class="num">Revenue</th>
-          <th class="num">Net income</th><th class="num">EPS (diluted)</th></tr></thead>
+        <thead><tr><th>Quarter</th><th class="num">Revenue</th>
+          <th class="num">Net income</th><th class="num" title="Diluted EPS">EPS</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`
         : `<p class="empty">No earnings history available.</p>`}
     </section>`;
@@ -376,22 +376,22 @@ function leapCard(s, leap) {
     `<span class="stat-v">${c.points}/${c.max}</span></div>`).join("");
   const rows = (leap.contracts || []).map((c) => `
     <tr>
-      <td>${c.role}</td>
-      <td>${fmtDate(c.expiry)} <span class="muted">(${c.dte}d)</span></td>
-      <td class="num">$${fmt(c.strike, c.strike % 1 ? 2 : 0)}</td>
-      <td class="num">$${fmt(c.mid)} <span class="muted">${fmt(c.bid)}–${fmt(c.ask)}</span></td>
-      <td class="num">${fmt(c.delta)}</td>
-      <td class="num">${fmt(c.iv, 0)}%</td>
-      <td class="num">${c.oi ?? "—"}</td>
-      <td class="num">${pct(c.breakeven_pct, 1)}</td>
-      <td class="num">${fmt(c.leverage, 1)}×</td>
+      <td><strong>${c.role}</strong></td>
+      <td data-label="Expiry">${fmtDate(c.expiry)} <span class="muted">(${c.dte}d)</span></td>
+      <td class="num" data-label="Strike">$${fmt(c.strike, c.strike % 1 ? 2 : 0)}</td>
+      <td class="num" data-label="Mid (bid–ask)">$${fmt(c.mid)} <span class="muted">${fmt(c.bid)}–${fmt(c.ask)}</span></td>
+      <td class="num" data-label="Delta">${fmt(c.delta)}</td>
+      <td class="num" data-label="IV">${fmt(c.iv, 0)}%</td>
+      <td class="num" data-label="Open int.">${c.oi ?? "—"}</td>
+      <td class="num" data-label="Breakeven">${pct(c.breakeven_pct, 1)}</td>
+      <td class="num" data-label="Leverage">${fmt(c.leverage, 1)}×</td>
     </tr>`).join("");
   return `
     <section class="stat-card leap-card">
       <h3>LEAP calls · <span class="pill ${cls}">${leap.leap_rating}</span>
         <span class="score-num">${leap.leap_score}/100</span></h3>
       ${checks}
-      ${rows ? `<div class="table-scroll mini-scroll"><table class="mini-table">
+      ${rows ? `<div class="table-scroll mini-scroll"><table class="mini-table contracts">
         <thead><tr><th>Style</th><th>Expiry</th><th class="num">Strike</th>
           <th class="num">Mid (bid–ask)</th><th class="num">Δ</th><th class="num">IV</th>
           <th class="num">OI</th><th class="num">Breakeven</th><th class="num">Lev.</th></tr></thead>
