@@ -57,7 +57,7 @@ RVOL_AVG_WINDOW = 50
 STRONG_BUY, BUY, SELL, STRONG_SELL = 60, 25, -20, -50
 
 # LEAP screen thresholds.
-LEAP_BUY, LEAP_WATCH = 70, 55
+LEAP_BUY, LEAP_WATCH = 75, 60
 
 
 # --------------------------------------------------------------------------- #
@@ -819,7 +819,7 @@ def leap_score(stock, detail=None):
     total = sum(c["points"] for c in checks.values())
 
     # Hard gates for a "LEAP Buy".
-    gates_ok = (uptrend and (rs or 0) >= 60 and mcap >= 2e9
+    gates_ok = (uptrend and rising and tt >= 7 and (rs or 0) >= 70 and mcap >= 2e9
                 and stock.get("rating") in ("Buy", "Strong Buy")
                 and (hv is None or hv <= 70))
     if total >= LEAP_BUY and gates_ok:

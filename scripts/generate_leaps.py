@@ -12,10 +12,13 @@ Runs *after* ``generate_data.py`` (it reads ``data/stocks.json`` and
   * liquidity    -- market cap (deep, tight LEAP markets)
   * timing       -- unextended entry (pullback preferred)
 
-Names scoring >= 70 that pass the hard gates (uptrend, RS >= 60, Buy-or-better
-rating, cap >= $2B, vol <= 70%) are "LEAP Buy"; >= 55 in an uptrend is
-"Watch". For those, the option chain is fetched from Yahoo and up to three
-calls per LEAP expiry (>= 365 days out) are suggested by Black-Scholes delta:
+Names scoring >= 75 that pass the hard gates (rising 200 SMA, Trend Template
+>= 7/8, RS >= 70, Buy-or-better rating, cap >= $2B, vol <= 70%) are eligible
+for "LEAP Buy"; >= 60 in an uptrend for "Watch". The list is then *ranked*
+and capped (``LEAP_BUY_MAX`` / ``WATCH_MAX``) so it stays a shortlist even in
+a broad bull market. For the shortlist, the option chain is fetched from
+Yahoo and up to three calls per LEAP expiry (>= 365 days out) are suggested
+by Black-Scholes delta:
 
   * Stock replacement  delta ~0.80  (deep ITM, least decay)
   * Balanced           delta ~0.65
@@ -50,11 +53,14 @@ OUTPUT_PATH = os.path.join(DATA_DIR, "leaps.json")
 # Screen / chain parameters.
 LEAP_MIN_DTE = 365        # a LEAP is an option with >= 1 year to expiry
 MAX_EXPIRIES = 2          # nearest LEAP expiry + the farthest one
-MAX_CHAINS = 60           # cap on tickers whose chains are fetched per run
+LEAP_BUY_MAX = 40         # at most this many "LEAP Buy" names (best scores)
+WATCH_MAX = 60            # at most this many "Watch" names
+MAX_CHAINS = LEAP_BUY_MAX + WATCH_MAX   # every listed name gets its chain
 RISK_FREE = 0.04          # annual risk-free rate used for delta
 MIN_OI = 25               # open-interest floor for "liquid" contracts
 MAX_SPREAD = 0.20         # bid/ask spread as a fraction of mid
-MAX_WORKERS = 4           # gentle on Yahoo
+MAX_WORKERS = 3           # gentle on Yahoo
+RETRY_DELAY = 3.0         # seconds before retrying a rate-limited chain fetch
 CANDIDATE_FIELDS = [
     "symbol", "name", "sector", "lists", "price", "change_pct", "market_cap",
     "pe", "rating", "score", "rs_rank", "tt_pass", "hv60", "sma200",
@@ -94,6 +100,15 @@ def screen(stocks, details):
         cand["chain_status"] = "not_fetched"
         out.append(cand)
     out.sort(key=lambda c: (c["leap_rating"] != "LEAP Buy", -c["leap_score"]))
+    # Rank + cap: the best LEAP_BUY_MAX eligible names keep "LEAP Buy", the
+    # rest of the eligible names become "Watch", and Watch is capped too.
+    total_eligible = sum(1 for c in out if c["leap_rating"] == "LEAP Buy")
+    for i, c in enumerate(out):
+        if c["leap_rating"] == "LEAP Buy" and i >= LEAP_BUY_MAX:
+            c["leap_rating"] = "Watch"
+    out = out[:LEAP_BUY_MAX + WATCH_MAX]
+    print(f"  {total_eligible} names met the LEAP Buy gates; keeping the top "
+          f"{min(total_eligible, LEAP_BUY_MAX)} as LEAP Buy and {len(out) - min(total_eligible, LEAP_BUY_MAX)} as Watch.")
     return out
 
 
@@ -116,10 +131,18 @@ def fetch_chain(symbol, today):
     """
     import yfinance as yf
 
-    try:
-        tk = yf.Ticker(symbol)
-        expiries = list(tk.options or [])
-    except Exception:  # noqa: BLE001
+    expiries = None
+    for attempt in range(2):
+        try:
+            tk = yf.Ticker(symbol)
+            expiries = list(tk.options or [])
+            break
+        except Exception as exc:  # noqa: BLE001
+            if attempt == 0 and "rate" in str(exc).lower():
+                time.sleep(RETRY_DELAY)
+                continue
+            return "error", []
+    if expiries is None:
         return "error", []
     leaps = [(e, _dte(e, today)) for e in expiries]
     leaps = [(e, d) for e, d in leaps if d is not None and d >= LEAP_MIN_DTE]
@@ -130,9 +153,16 @@ def fetch_chain(symbol, today):
 
     chains = []
     for expiry, dte in chosen:
-        try:
-            calls = tk.option_chain(expiry).calls
-        except Exception:  # noqa: BLE001
+        calls = None
+        for attempt in range(2):
+            try:
+                calls = tk.option_chain(expiry).calls
+                break
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 0 and "rate" in str(exc).lower():
+                    time.sleep(RETRY_DELAY)
+                    continue
+        if calls is None:
             continue
         rows = []
         for _, c in calls.iterrows():
