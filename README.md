@@ -102,8 +102,11 @@ is scored 0–100 by `strategies.leap_score`:
 | Liquidity | 10 | market cap (deep, tight LEAP markets) |
 | Timing | 5 | unextended entry (pullback preferred) |
 
-**LEAP Buy** needs ≥ 70 *and* the hard gates (uptrend, RS ≥ 60, a Buy-or-better
-rating, cap ≥ $2B, vol ≤ 70%); ≥ 55 in an uptrend is **Watch**. For candidates,
+**LEAP Buy** needs ≥ 75 *and* the hard gates (rising 200 SMA, Trend Template
+≥ 7/8, RS ≥ 70, a Buy-or-better rating, cap ≥ $2B, vol ≤ 70%); ≥ 60 in an
+uptrend is **Watch**. The list is then ranked and capped (top 40 LEAP Buy, next
+60 Watch, `LEAP_BUY_MAX` / `WATCH_MAX`) so it stays a shortlist even when most
+of the market is trending. For the shortlist,
 `scripts/generate_leaps.py` pulls the option chain from Yahoo, keeps expiries
 ≥ 365 days out (nearest + farthest), computes a Black-Scholes delta from each
 contract's implied volatility, and suggests three calls per expiry:
