@@ -501,7 +501,6 @@ function render(el, s, d) {
 
     ${earningsSection(d)}
 
-    ${s.reason ? `<p class="reason-note"><strong>Why this rating:</strong> ${s.reason}</p>` : ""}
     ${d.website ? `<p class="reason-note"><a href="${d.website}" target="_blank" rel="noopener">${d.website}</a>${d.country ? ` · ${d.country}` : ""}</p>` : ""}
   `;
 
