@@ -1,0 +1,42 @@
+name: Backtest rating strategies
+
+# Manual, on-demand: downloads the site's universe from Yahoo Finance and
+# compares the composite rating, the legacy EMA/RSI rating and each component
+# strategy on forward returns. Does not change the site.
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "Years of history to download"
+        default: "6"
+      limit:
+        description: "Max tickers (0 = whole universe)"
+        default: "0"
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run backtest
+        run: |
+          python scripts/backtest.py --live \
+            --years "${{ github.event.inputs.years }}" \
+            --limit "${{ github.event.inputs.limit }}" \
+            --out backtest.json | tee backtest.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-report
+          path: |
+            backtest.txt
+            backtest.json

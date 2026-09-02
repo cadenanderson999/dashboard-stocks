@@ -4,13 +4,19 @@
 The universe is the union of the Robinhood Top 100 and the S&P 500. Each ticker
 is tagged with the list(s) it belongs to and its GICS sector.
 
-For every ticker this computes, on the **daily** timeframe:
+For every ticker this computes, on the **daily** timeframe, the multi-factor
+composite rating from ``strategies.py``:
 
-  * EMA(50) and EMA(200)            -> trend (golden cross / death cross)
-  * RSI(14)                         -> momentum (overbought / oversold)
+  * Trend     -> Minervini Trend Template (50/150/200 SMA stack, rising 200 SMA,
+                 52-week range position)
+  * Momentum  -> cross-sectional relative-strength rank (1-99) + 12-1 momentum
+  * Timing    -> pullback-in-uptrend entries (RSI 14 / RSI 2), bear bounces
+  * Volume    -> accumulation vs distribution (up/down volume, OBV)
 
-It then combines the two into a single Buy/Sell rating and writes everything to
-``data/stocks.json``, which the static front-end loads.
+plus the supporting indicators (EMAs, RSI, MACD, ADX, ATR, realised vol,
+relative volume) and writes everything to ``data/stocks.json``, which the
+static front-end loads. ``scripts/backtest.py`` compares the rating against
+the previous EMA-50/200 + RSI table.
 
 Data source: Yahoo Finance via the ``yfinance`` library (free, no API key).
 
@@ -41,6 +47,7 @@ from tickers import (  # noqa: E402
     RH_SECTORS,
     sp500_fallback_map,
 )
+import strategies as strat  # noqa: E402
 
 # Universe list labels.
 RH_LIST = "Robinhood 100"
@@ -50,7 +57,8 @@ SP_LIST = "S&P 500"
 WIKI_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) dashboard-stocks/1.0"
 SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 
-# Indicator parameters.
+# Indicator parameters (kept for the EMA/RSI columns; the rating itself is
+# parameterised in strategies.py).
 EMA_FAST = 50
 EMA_SLOW = 200
 RSI_PERIOD = 14
@@ -76,37 +84,13 @@ DETAILS_PATH = os.path.join(
 # --------------------------------------------------------------------------- #
 def ema(values, period):
     """Exponential moving average. Returns a list aligned with ``values``."""
-    if not values:
-        return []
-    k = 2.0 / (period + 1.0)
-    out = [values[0]]
-    for price in values[1:]:
-        out.append(price * k + out[-1] * (1.0 - k))
-    return out
+    return strat.ema_series(values, period)
 
 
 def rsi(values, period=RSI_PERIOD):
     """Wilder's RSI. Returns the latest RSI value (0-100) or None."""
-    if len(values) < period + 1:
-        return None
-    gains, losses = [], []
-    for i in range(1, len(values)):
-        change = values[i] - values[i - 1]
-        gains.append(max(change, 0.0))
-        losses.append(max(-change, 0.0))
-
-    # Seed with a simple average of the first `period` changes...
-    avg_gain = sum(gains[:period]) / period
-    avg_loss = sum(losses[:period]) / period
-    # ...then smooth (Wilder) over the rest.
-    for i in range(period, len(gains)):
-        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
-        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
-
-    if avg_loss == 0:
-        return 100.0
-    rs = avg_gain / avg_loss
-    return 100.0 - (100.0 / (1.0 + rs))
+    series = strat.rsi_series(values, period)
+    return series[-1] if series else None
 
 
 def rvol_stats(volumes, avg_window=RVOL_AVG_WINDOW, lookback=RVOL_LOOKBACK,
@@ -147,61 +131,21 @@ def rvol_stats(volumes, avg_window=RVOL_AVG_WINDOW, lookback=RVOL_LOOKBACK,
 
 
 # --------------------------------------------------------------------------- #
-# Rating logic
+# Rating logic (see strategies.py)
 # --------------------------------------------------------------------------- #
-def make_rating(ema_fast, ema_slow, rsi_value):
-    """Combine trend (EMA) and momentum (RSI) into a single rating.
+def make_rating(ind, rs_rank=None):
+    """Composite multi-factor rating for the latest bar of an indicator bundle."""
+    return strat.evaluate(ind, -1, rs_rank)
 
-    Returns a dict with: rating, score (-2..2), trend, momentum, reason.
-    """
-    if ema_fast is None or ema_slow is None or rsi_value is None:
-        return {
-            "rating": "No Data",
-            "score": 0,
-            "trend": "Unknown",
-            "momentum": "Unknown",
-            "reason": "Insufficient price history to compute indicators.",
-        }
 
-    bullish_trend = ema_fast > ema_slow
-    trend = "Bullish" if bullish_trend else "Bearish"
-
-    if rsi_value < 30:
-        momentum = "Oversold"
-    elif rsi_value > 70:
-        momentum = "Overbought"
-    else:
-        momentum = "Neutral"
-
-    # Decision table: trend (EMA50 vs EMA200) x momentum (RSI).
-    if bullish_trend:
-        if momentum == "Oversold":
-            rating, score = "Strong Buy", 2
-            reason = "Uptrend (EMA50 > EMA200) with an oversold RSI pullback."
-        elif momentum == "Overbought":
-            rating, score = "Hold", 0
-            reason = "Uptrend, but RSI is overbought — may be extended."
-        else:
-            rating, score = "Buy", 1
-            reason = "Uptrend (EMA50 > EMA200) with healthy momentum."
-    else:
-        if momentum == "Overbought":
-            rating, score = "Strong Sell", -2
-            reason = "Downtrend (EMA50 < EMA200) with an overbought RSI bounce."
-        elif momentum == "Oversold":
-            rating, score = "Hold", 0
-            reason = "Downtrend, but RSI is oversold — possible relief bounce."
-        else:
-            rating, score = "Sell", -1
-            reason = "Downtrend (EMA50 < EMA200) with weak momentum."
-
-    return {
-        "rating": rating,
-        "score": score,
-        "trend": trend,
-        "momentum": momentum,
-        "reason": reason,
-    }
+def compute_rs_ranks(price_map):
+    """Cross-sectional RS rank (1-99) for ``{symbol: {"close": [...]}}``."""
+    raw = {}
+    for sym, p in price_map.items():
+        closes = p.get("close") or []
+        if len(closes) > strat.YEAR:
+            raw[sym] = strat.weighted_rs_series(closes)[-1]
+    return strat.percentile_ranks(raw)
 
 
 def fetch_sp500():
@@ -365,42 +309,79 @@ def fetch_fundamentals(symbols):
     return out
 
 
-def build_record(symbol, closes, volumes=None, name=None, pe=None,
-                 market_cap=None, sector=None, lists=None):
-    """Compute indicators + rating for one ticker from its price/volume series."""
-    ema_fast_series = ema(closes, EMA_FAST) if len(closes) >= EMA_FAST else None
-    ema_slow_series = ema(closes, EMA_SLOW) if len(closes) >= EMA_SLOW else None
-    ema_fast = ema_fast_series[-1] if ema_fast_series else None
-    ema_slow = ema_slow_series[-1] if ema_slow_series else None
-    rsi_value = rsi(closes)
-    rv = rvol_stats(volumes or [])
+def build_record(symbol, closes, volumes=None, highs=None, lows=None,
+                 rs_rank=None, name=None, pe=None, market_cap=None,
+                 sector=None, lists=None):
+    """Compute indicators + rating for one ticker from its OHLCV series.
 
+    ``highs``/``lows`` are optional (ADX/ATR degrade to close-only estimates);
+    ``rs_rank`` is the ticker's cross-sectional relative-strength rank (1-99),
+    computed by the caller across the whole universe.
+    """
+    volumes = volumes or []
+    ind = strat.compute_indicators(closes, highs, lows, volumes)
+    last = lambda key: ind[key][-1] if ind.get(key) else None  # noqa: E731
+
+    rv = rvol_stats(volumes)
     price = closes[-1] if closes else None
     prev = closes[-2] if len(closes) >= 2 else None
     change_pct = ((price - prev) / prev * 100.0) if (price and prev) else None
 
-    rating = make_rating(ema_fast, ema_slow, rsi_value)
+    rating = make_rating(ind, rs_rank) if closes else strat.no_data_rating()
 
     def r(x, n=2):
         return round(x, n) if isinstance(x, (int, float)) and not math.isnan(x) else None
 
-    return {
+    atr = last("atr")
+    high52, low52 = last("high52"), last("low52")
+    rec = {
         "symbol": symbol,
         "name": name or symbol,
         "price": r(price),
         "change_pct": r(change_pct),
-        "ema50": r(ema_fast),
-        "ema200": r(ema_slow),
-        "rsi": r(rsi_value, 1),
+        # Moving averages.
+        "ema50": r(last("ema50")) if len(closes) >= EMA_FAST else None,
+        "ema200": r(last("ema200")) if len(closes) >= EMA_SLOW else None,
+        "sma50": r(last("sma50")),
+        "sma150": r(last("sma150")),
+        "sma200": r(last("sma200")),
+        "sma200_rising": rating.get("sma200_rising"),
+        # Oscillators / trend strength.
+        "rsi": r(last("rsi14"), 1),
+        "rsi2": r(last("rsi2"), 1),
+        "macd": r(last("macd"), 3),
+        "macd_signal": r(last("macd_signal"), 3),
+        "macd_hist": r(last("macd_hist"), 3),
+        "adx": r(last("adx"), 1),
+        "atr": r(atr),
+        "atr_pct": r(atr / price * 100.0) if (atr and price) else None,
+        "stop_2atr": r(price - 2.0 * atr) if (atr and price) else None,
+        "hv60": r(last("hv"), 1),
+        # 52-week range + returns.
+        "high52": r(high52),
+        "low52": r(low52),
+        "pct_off_high": r((price / high52 - 1.0) * 100.0) if (price and high52) else None,
+        "pct_above_low": r((price / low52 - 1.0) * 100.0) if (price and low52) else None,
+        "ret_1m": r((last("ret_1m") or 0) * 100.0, 1) if last("ret_1m") is not None else None,
+        "ret_3m": r((last("ret_3m") or 0) * 100.0, 1) if last("ret_3m") is not None else None,
+        "ret_6m": r((last("ret_6m") or 0) * 100.0, 1) if last("ret_6m") is not None else None,
+        "mom_12_1": r((last("mom_12_1") or 0) * 100.0, 1) if last("mom_12_1") is not None else None,
+        # Relative strength.
+        "rs_rank": rs_rank,
+        "rs_raw": r(last("rs_raw"), 4),
+        # Volume.
+        "udv_ratio": r(last("udv")),
         "rvol_mean": r(rv["rvol_mean"]),
         "rvol_high_days": rv["rvol_high_days"],
         "rvol_today": r(rv["rvol_today"]),
+        # Fundamentals / tags.
         "pe": r(pe, 1),
         "market_cap": int(market_cap) if isinstance(market_cap, (int, float)) else None,
         "sector": sector or "Other",
         "lists": sorted(lists) if lists else [],
-        **rating,
     }
+    rec.update(rating)
+    return rec
 
 
 def _ts_to_date(ts):
@@ -464,10 +445,14 @@ def build_detail(info, earnings=None):
 # --------------------------------------------------------------------------- #
 # Data acquisition
 # --------------------------------------------------------------------------- #
-def download_prices(symbols, chunk=100):
-    """Download daily close+volume for many symbols, chunked to be API-friendly.
+EMPTY_PRICES = {"dates": [], "close": [], "high": [], "low": [], "volume": []}
 
-    Returns ``{symbol: (closes, volumes)}`` (empty tuples for failures).
+
+def download_prices(symbols, chunk=100, period=LOOKBACK):
+    """Download daily OHLCV for many symbols, chunked to be API-friendly.
+
+    Returns ``{symbol: {"dates", "close", "high", "low", "volume"}}`` (empty
+    lists for failures).
     """
     import yfinance as yf  # imported lazily so --sample works without it
 
@@ -477,7 +462,7 @@ def download_prices(symbols, chunk=100):
         print(f"  downloading {i + 1}-{i + len(part)} of {len(symbols)}...")
         data = yf.download(
             tickers=part,
-            period=LOOKBACK,
+            period=period,
             interval="1d",
             group_by="ticker",
             auto_adjust=True,
@@ -487,11 +472,17 @@ def download_prices(symbols, chunk=100):
         for sym in part:
             try:
                 df = data if len(part) == 1 else data[sym]
-                # Keep close + volume aligned by dropping rows missing either.
-                sub = df[["Close", "Volume"]].dropna()
-                out[sym] = (sub["Close"].tolist(), sub["Volume"].tolist())
+                # Keep the columns aligned by dropping rows missing any of them.
+                sub = df[["Close", "High", "Low", "Volume"]].dropna()
+                out[sym] = {
+                    "dates": [d.strftime("%Y-%m-%d") for d in sub.index],
+                    "close": sub["Close"].tolist(),
+                    "high": sub["High"].tolist(),
+                    "low": sub["Low"].tolist(),
+                    "volume": sub["Volume"].tolist(),
+                }
             except (KeyError, TypeError):
-                out[sym] = ([], [])
+                out[sym] = dict(EMPTY_PRICES)
     return out
 
 
@@ -503,20 +494,22 @@ def fetch_live():
 
     prices = download_prices(symbols)
     fundamentals = fetch_fundamentals(symbols)
+    rs_ranks = compute_rs_ranks(prices)
 
     records = []
     details = {}
     skipped = 0
     for symbol in symbols:
-        closes, volumes = prices.get(symbol, ([], []))
-        if not closes:
+        p = prices.get(symbol) or EMPTY_PRICES
+        if not p["close"]:
             skipped += 1
             continue
 
         meta = universe[symbol]
         f = fundamentals.get(symbol, {})
         records.append(build_record(
-            symbol, closes, volumes,
+            symbol, p["close"], p["volume"], highs=p["high"], lows=p["low"],
+            rs_rank=rs_ranks.get(symbol),
             name=meta.get("name"),
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=meta.get("sector"), lists=meta.get("lists"),
@@ -535,27 +528,39 @@ def generate_sample():
     universe = build_universe(live=False)
     records = []
     details = {}
-    for symbol, meta in universe.items():
+    # First pass: synthetic OHLCV for everyone (so RS ranks can be computed
+    # cross-sectionally, exactly like the live path).
+    prices = {}
+    for symbol in universe:
         base = rng.uniform(15, 500)
         base_vol = rng.uniform(1e6, 5e7)
-        # Build a synthetic but plausible close + volume series.
         drift = rng.uniform(-0.0015, 0.0020)
-        closes, volumes = [], []
+        closes, highs, lows, volumes = [], [], [], []
         price = base
-        for _ in range(260):
+        for _ in range(300):
             price *= 1.0 + drift + rng.uniform(-0.02, 0.02)
             price = max(price, 1.0)
             closes.append(price)
+            highs.append(price * (1.0 + rng.uniform(0.0, 0.02)))
+            lows.append(price * (1.0 - rng.uniform(0.0, 0.02)))
             # Normal-ish volume with occasional surges.
             vol = base_vol * rng.uniform(0.6, 1.4)
             if rng.random() < 0.08:
                 vol *= rng.uniform(2.0, 4.0)
             volumes.append(vol)
+        prices[symbol] = {"close": closes, "high": highs, "low": lows,
+                          "volume": volumes, "base_vol": base_vol}
+    rs_ranks = compute_rs_ranks(prices)
+
+    for symbol, meta in universe.items():
+        p = prices[symbol]
+        closes, volumes, base_vol = p["close"], p["volume"], p["base_vol"]
         # Plausible fundamentals: most have a P/E, some (no earnings) don't.
         pe = None if rng.random() < 0.15 else rng.uniform(8, 70)
         market_cap = closes[-1] * rng.uniform(1e7, 6e9)
         records.append(build_record(
-            symbol, closes, volumes, name=meta.get("name"),
+            symbol, closes, volumes, highs=p["high"], lows=p["low"],
+            rs_rank=rs_ranks.get(symbol), name=meta.get("name"),
             pe=pe, market_cap=market_cap,
             sector=meta.get("sector"), lists=meta.get("lists"),
         ))
@@ -614,9 +619,15 @@ def write_output(records, is_sample):
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "is_sample": is_sample,
         "params": {
+            "strategy": "composite-v2",
+            "sma": [strat.SMA_FAST, strat.SMA_MID, strat.SMA_SLOW],
             "ema_fast": EMA_FAST,
             "ema_slow": EMA_SLOW,
             "rsi_period": RSI_PERIOD,
+            "thresholds": {
+                "strong_buy": strat.STRONG_BUY, "buy": strat.BUY,
+                "sell": strat.SELL, "strong_sell": strat.STRONG_SELL,
+            },
             "rvol_avg_window": RVOL_AVG_WINDOW,
             "rvol_lookback": RVOL_LOOKBACK,
             "rvol_threshold": RVOL_THRESHOLD,

@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Buy Side Signals" />
   <meta name="description"
-        content="Robinhood Top 100 and S&P 500 stocks with Buy/Sell ratings from the 50/200 EMA trend and daily RSI, plus relative volume, P/E and sector filters." />
+        content="Robinhood Top 100 and S&P 500 stocks with multi-factor Buy/Sell ratings (trend template, relative strength, pullback timing, volume), LEAP call ideas, plus relative volume, P/E and sector filters." />
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
 <body>
@@ -21,6 +21,10 @@
     <div class="wrap">
       <h1>Buy Side Signals</h1>
       <div id="auth-area" class="auth-area"></div>
+      <nav class="tabs" aria-label="Pages">
+        <a class="tab active" href="index.html">Signals</a>
+        <a class="tab" href="leaps.html">LEAP Calls</a>
+      </nav>
     </div>
   </header>
 
@@ -67,15 +71,14 @@
             <th class="sortable num" data-key="change_pct">Day %</th>
             <th class="sortable num" data-key="market_cap">Mkt Cap</th>
             <th class="sortable num" data-key="pe" title="Trailing price-to-earnings ratio">P/E</th>
-            <th class="sortable num" data-key="ema50">EMA 50</th>
-            <th class="sortable num" data-key="ema200">EMA 200</th>
-            <th class="sortable" data-key="trend">Trend</th>
-            <th class="sortable num" data-key="rsi">RSI</th>
-            <th class="sortable" data-key="momentum">Momentum</th>
+            <th class="sortable" data-key="trend" title="Price vs 50/200-day SMA">Trend</th>
+            <th class="sortable num" data-key="rs_rank" title="Relative-strength rank 1–99 vs the whole universe (weighted 3/6/9/12-month returns)">RS</th>
+            <th class="sortable num" data-key="rsi" title="RSI (14)">RSI</th>
+            <th class="sortable" data-key="timing" title="Entry timing: Pullback (in an uptrend), At Highs, Breakout, Extended, Bear Bounce, Oversold (in a downtrend)">Timing</th>
             <th class="sortable num" data-key="rvol_mean" title="Mean relative volume over the last 30 trading days (1.0 = normal)">RVOL 30d</th>
             <th class="sortable num" data-key="rvol_high_days" title="Number of the last 30 days with volume above 2× its 50-day average">Surge Days</th>
             <th class="sortable" data-key="sector">Sector</th>
-            <th class="sortable" data-key="score">Rating</th>
+            <th class="sortable" data-key="score" title="Composite score −100..+100 from trend, momentum, timing and volume">Rating</th>
           </tr>
         </thead>
         <tbody id="stock-body"><!-- filled by JS --></tbody>
@@ -88,11 +91,13 @@
   <footer class="site-footer wrap">
     <p>
       Last updated: <span id="updated-at">—</span> ·
-      Indicators recomputed daily from Yahoo Finance close prices.
+      Indicators recomputed daily from Yahoo Finance prices.
+      Rating = trend template + relative strength + pullback timing + volume
+      (see the README for the backtest).
     </p>
     <p class="disclaimer">
       <strong>Not financial advice.</strong> These ratings are mechanical signals
-      derived from two technical indicators and are for educational purposes only.
+      derived from technical indicators and are for educational purposes only.
       Do your own research.
     </p>
   </footer>

@@ -29,11 +29,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from generate_data import (  # noqa: E402
     rvol_stats,
     RVOL_AVG_WINDOW,
+    OUTPUT_PATH as STOCKS_PATH,
     build_universe,
     build_record,
+    compute_rs_ranks,
     download_prices,
     fetch_fundamentals,
 )
+import strategies as strat  # noqa: E402
 
 # Scan parameters.
 SCAN_PERIOD = "3mo"          # enough history for a 50-day average + today
@@ -215,6 +218,30 @@ def scan_candidates(symbols_meta):
     return candidates[:MAX_RESULTS]
 
 
+def scan_rs_ranks(prices):
+    """RS ranks for the scan hits.
+
+    Relative strength is a *cross-sectional* measure, so rank each hit against
+    the Signals page's whole universe (``data/stocks.json``, written just
+    before this script runs). Falls back to ranking within the scan set.
+    """
+    reference = []
+    try:
+        with open(STOCKS_PATH) as f:
+            reference = [s.get("rs_raw") for s in json.load(f).get("stocks", [])]
+    except (OSError, ValueError):
+        pass
+    reference = [v for v in reference if v is not None]
+    if len(reference) < 50:
+        return compute_rs_ranks(prices)
+    out = {}
+    for sym, p in prices.items():
+        closes = p.get("close") or []
+        if len(closes) > strat.YEAR:
+            out[sym] = strat.rank_against(strat.weighted_rs_series(closes)[-1], reference)
+    return out
+
+
 def enrich(candidates, symbols_meta):
     """Second pass: compute the full signal set for the RVOL hits.
 
@@ -228,10 +255,12 @@ def enrich(candidates, symbols_meta):
 
     prices = download_prices(syms)            # default 2y history
     fundamentals = fetch_fundamentals(syms)   # pe, market_cap, sector
+    rs_ranks = scan_rs_ranks(prices)
 
     records = []
     for sym in syms:
-        closes, volumes = prices.get(sym, ([], []))
+        p = prices.get(sym) or {}
+        closes = p.get("close") or []
         if not closes:
             continue
         f = fundamentals.get(sym, {})
@@ -239,7 +268,8 @@ def enrich(candidates, symbols_meta):
         meta = symbols_meta.get(sym, {})
         sector = u.get("sector") or f.get("sector") or "Other"
         rec = build_record(
-            sym, closes, volumes,
+            sym, closes, p.get("volume"), highs=p.get("high"), lows=p.get("low"),
+            rs_rank=rs_ranks.get(sym),
             name=u.get("name") or meta.get("name") or sym,
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=sector, lists=u.get("lists"),
@@ -265,26 +295,34 @@ def generate_sample():
     syms = list(universe.keys())
     rng.shuffle(syms)
 
-    records = []
+    prices = {}
     for sym in syms[:45]:
         base = rng.uniform(15, 500)
         base_vol = rng.uniform(1e5, 3e7)
         drift = rng.uniform(-0.0015, 0.0020)
-        closes, volumes = [], []
+        closes, highs, lows, volumes = [], [], [], []
         price = base
-        for _ in range(260):
+        for _ in range(300):
             price *= 1.0 + drift + rng.uniform(-0.02, 0.02)
             price = max(price, 1.0)
             closes.append(price)
+            highs.append(price * (1.0 + rng.uniform(0.0, 0.02)))
+            lows.append(price * (1.0 - rng.uniform(0.0, 0.02)))
             volumes.append(base_vol * rng.uniform(0.6, 1.4))
         # Force the most recent day to be a volume surge (RVOL ~2-8x).
         volumes[-1] = base_vol * rng.uniform(2.0, 8.0)
+        prices[sym] = {"close": closes, "high": highs, "low": lows, "volume": volumes}
+    rs_ranks = compute_rs_ranks(prices)
 
+    records = []
+    for sym, p in prices.items():
+        closes = p["close"]
         u = universe[sym]
         pe = None if rng.random() < 0.15 else rng.uniform(8, 70)
         market_cap = closes[-1] * rng.uniform(1e7, 6e9)
         rec = build_record(
-            sym, closes, volumes, name=u.get("name") or sym,
+            sym, closes, p["volume"], highs=p["high"], lows=p["low"],
+            rs_rank=rs_ranks.get(sym), name=u.get("name") or sym,
             pe=pe, market_cap=market_cap,
             sector=u.get("sector"), lists=u.get("lists"),
         )

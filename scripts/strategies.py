@@ -23,9 +23,14 @@ the old EMA-50/200 + RSI decision table:
   * Volume      -- accumulation vs distribution (up-volume / down-volume ratio
                    over 50 days) and OBV vs its 20-day average.
 
-Each family produces a signed sub-score; their sum (-95..+95) maps to
-Strong Buy / Buy / Hold / Sell / Strong Sell. ``scripts/backtest.py`` measures
-this composite (and each family on its own) against the legacy rating.
+Each family produces a signed sub-score; their sum (about -90..+90) maps to
+Strong Buy / Buy / Hold / Sell / Strong Sell. The weights were chosen with
+``scripts/backtest.py`` on five years of daily S&P 500 data (2013-2018): the
+factors with a measurable forward-return edge got weight (relative strength,
+rising 200-day trend, distance above the 52-week low, pullbacks *inside*
+uptrends, accumulation volume) and the ones with none or a negative edge
+(MACD state, ADX, volume breakouts, "over-extension" penalties) are reported
+as labels only and do not move the score.
 """
 
 from __future__ import annotations
@@ -49,7 +54,7 @@ HV_WINDOW = 60             # realised-volatility window (days)
 RVOL_AVG_WINDOW = 50
 
 # Composite rating thresholds (score is roughly -95..+95).
-STRONG_BUY, BUY, SELL, STRONG_SELL = 50, 20, -20, -50
+STRONG_BUY, BUY, SELL, STRONG_SELL = 60, 25, -20, -50
 
 # LEAP screen thresholds.
 LEAP_BUY, LEAP_WATCH = 70, 55
@@ -495,25 +500,26 @@ def evaluate(ind, i=-1, rs_rank=None):
 
     uptrend = close > sma200
     setups = []
+    sma200_rising = (sma200 > sma200_prev) if sma200_prev is not None else None
 
-    # ---- Trend (±40) ---------------------------------------------------- #
+    # ---- Trend (±35) ---------------------------------------------------- #
+    # Price vs 200 SMA, golden cross, rising 200 SMA, the 50/150/200 stack and
+    # Minervini's ">= 30% above the 52-week low" test all showed a positive
+    # forward-return edge; a bearish stack was the most negative trend state.
     t = 0
     t += 10 if uptrend else -10
     t += 8 if sma50 > sma200 else -8
-    t += 6 if close > sma50 else -6
+    if sma200_rising is not None:
+        t += 6 if sma200_rising else -6
     if sma150 is not None:
         if sma50 > sma150 > sma200:
             t += 6
         elif sma50 < sma150 < sma200:
-            t -= 6
-    sma200_rising = None
-    if sma200_prev is not None:
-        sma200_rising = sma200 > sma200_prev
-        t += 5 if sma200_rising else -5
-    if adx is not None and pdi is not None and mdi is not None and adx >= 25:
-        t += 5 if pdi > mdi else -5
+            t -= 8
+    if low52 is not None and close >= 1.30 * low52:
+        t += 5
 
-    # Minervini Trend Template (8 tests).
+    # Minervini Trend Template (8 tests) -- reported, and feeds the LEAP screen.
     tt = None
     if sma150 is not None and high52 is not None and low52 is not None:
         tests = [
@@ -535,19 +541,24 @@ def evaluate(ind, i=-1, rs_rank=None):
     elif _crossed_down(ind["sma50"], ind["sma200"], i, 10):
         setups.append("Death Cross")
 
-    # ---- Momentum (±30) ------------------------------------------------- #
+    # ---- Momentum (±35) ------------------------------------------------- #
+    # Cross-sectional RS rank is the single strongest factor in the backtest
+    # (top quintile beat the universe by ~+0.9% per 6 months; bottom quintile
+    # lagged by ~-1.1%), so it gets the largest weight.
     m = 0.0
     if rs_rank is not None:
-        m += max(-20.0, min(20.0, (rs_rank - 50) / 50.0 * 20.0))
+        m += max(-25.0, min(25.0, (rs_rank - 50) / 50.0 * 25.0))
     elif mom is not None:
-        m += max(-20.0, min(20.0, mom * 50.0))
+        m += max(-25.0, min(25.0, mom * 60.0))
+    if mom is not None:
+        m += 5 if mom > 0.30 else -5 if mom < -0.10 else 0
+    near_high = high52 is not None and close >= 0.98 * high52
+    if near_high:
+        m += 5
+        setups.append("52-Week High")
     macd_label = "Unknown"
     if macd is not None and sig is not None:
-        bull = macd > sig
-        m += 6 if bull else -6
-        macd_label = "Bullish" if bull else "Bearish"
-        if hist is not None and hist_prev is not None:
-            m += 4 if hist > hist_prev else -4
+        macd_label = "Bullish" if macd > sig else "Bearish"
         if _crossed_up(ind["macd"], ind["macd_signal"], i, 5):
             setups.append("MACD Bull Cross")
         elif _crossed_down(ind["macd"], ind["macd_signal"], i, 5):
@@ -555,54 +566,48 @@ def evaluate(ind, i=-1, rs_rank=None):
     if rs_rank is not None and rs_rank >= 80:
         setups.append("Momentum Leader")
 
-    # ---- Timing (±15) --------------------------------------------------- #
+    # ---- Timing (−8..+12) ----------------------------------------------- #
+    # Pullbacks inside an uptrend (RSI(14) < 45, RSI(2) < 10) had the best
+    # 1-month hit rate (~63-66%) and stayed positive at 3 months. Oversold
+    # readings in a *downtrend* were the worst setups, so they are penalised.
     ext = close / sma50 - 1.0
-    near_high = high52 is not None and close >= 0.98 * high52
     tm = 0
     timing = "Neutral"
     if uptrend:
-        if near_high and (rvol or 0) >= 1.5 and ext <= 0.15:
-            tm, timing = 7, "Breakout"
-            setups.append("Breakout")
-        elif ext > 0.15 or (rsi14 is not None and rsi14 > 80):
-            tm, timing = -10, "Extended"
-        elif ext > 0.10:
-            tm, timing = -5, "Extended"
-        elif (rsi14 is not None and rsi14 < 30) or (rsi2 is not None and rsi2 < 10):
-            tm, timing = 10, "Pullback"
-            if (rs_rank or 0) >= 60:
-                setups.append("Pullback Buy")
-        elif rsi14 is not None and rsi14 < 45 and ext < 0.03:
-            tm, timing = 6, "Pullback"
+        if rsi14 is not None and rsi14 < 30:
+            tm, timing = 12, "Pullback"
+        elif rsi14 is not None and rsi14 < 45:
+            tm, timing = 8 + (4 if (rsi2 is not None and rsi2 < 10) else 0), "Pullback"
+        elif rsi2 is not None and rsi2 < 10:
+            tm, timing = 4, "Pullback"
+        elif ext > 0.15:
+            timing = "Extended"
+        elif near_high and (rvol or 0) >= 1.5:
+            timing = "Breakout"
         elif near_high:
             timing = "At Highs"
-            setups.append("52-Week High")
+        if timing == "Pullback" and (rs_rank or 0) >= 60:
+            setups.append("Pullback Buy")
     else:
         if rsi14 is not None and rsi14 > 65:
             tm, timing = -8, "Bear Bounce"
             setups.append("Bear Bounce")
         elif rsi14 is not None and rsi14 < 25:
-            tm, timing = 5, "Oversold"
-    if timing == "Extended":
-        setups.append("Extended")
+            tm, timing = -6, "Oversold"
 
-    # ---- Volume (±10) --------------------------------------------------- #
+    # ---- Volume (±8) ---------------------------------------------------- #
     v = 0
     if udv is not None:
         if udv >= 1.3:
-            v += 6
-        elif udv >= 1.1:
-            v += 3
+            v += 5
         elif udv <= 0.77:
-            v -= 6
-        elif udv <= 0.9:
-            v -= 3
+            v -= 5
         if udv >= 1.5:
             setups.append("Accumulation")
         elif udv <= 0.67:
             setups.append("Distribution")
     if obv is not None and obv_sma is not None and ind["volume"][i] > 0:
-        v += 4 if obv > obv_sma else -4
+        v += 3 if obv > obv_sma else -3
 
     score = int(round(t + m + tm + v))
     score = max(-100, min(100, score))
@@ -632,8 +637,8 @@ def evaluate(ind, i=-1, rs_rank=None):
         bits.append(f"RS rank {rs_rank}")
     if macd_label != "Unknown":
         bits.append(f"MACD {macd_label.lower()}")
-    if adx is not None:
-        bits.append(f"ADX {adx:.0f}" + (" (strong trend)" if adx >= 25 else " (weak trend)"))
+    if adx is not None and pdi is not None and mdi is not None:
+        bits.append(f"ADX {adx:.0f} ({'+' if pdi > mdi else '-'}DI leads)")
     if timing != "Neutral":
         bits.append(f"{timing.lower()}" + (f" (RSI {rsi14:.0f})" if rsi14 is not None else ""))
     if udv is not None:
