@@ -1,9 +1,16 @@
 name: Update data & deploy to Pages
 
 on:
-  # Refresh after US market close (Mon–Fri). 22:00 UTC ≈ 6 PM ET / 5 PM ET (DST).
+  # Refresh twice on trading days (Mon–Fri), times in UTC:
+  #   22:00 ≈ 6 PM EDT / 5 PM EST — after the close, catches same-evening
+  #           earnings releases once Yahoo has ingested them.
+  #   10:30 ≈ 6:30 AM EDT / 5:30 AM EST — before the open, so anything that
+  #           reported after the previous close (or overnight) is live on the
+  #           site the next morning rather than ~24 h later.
+  # GitHub often starts scheduled runs 30–90 min late, so both leave headroom.
   schedule:
     - cron: "0 22 * * 1-5"
+    - cron: "30 10 * * 1-5"
   # Allow manual runs from the Actions tab.
   workflow_dispatch:
   # Redeploy on pushes to the site itself.
@@ -35,17 +42,57 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Yahoo rate-limits bursts, and a throttled ticker comes back with no
+      # earnings at all. Hand the generator what the site is already serving so
+      # those gaps are filled from the last good run instead of published empty.
+      - name: Fetch currently published details
+        id: prev_details
+        continue-on-error: true
+        run: |
+          host="$(tr -d '[:space:]' < CNAME 2>/dev/null || true)"
+          if [ -n "$host" ] && curl -fsSL --max-time 60 "https://$host/data/details.json" -o /tmp/prev_details.json; then
+            echo "path=/tmp/prev_details.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "Could not fetch published details; continuing without a backfill source."
+          fi
+
       - name: Generate stock data
         # Don't fail the deploy if a few tickers are flaky; the script falls
         # back to sample data and exits non-zero only if EVERYTHING failed.
-        run: python scripts/generate_data.py || echo "Data generation had issues; continuing."
+        run: |
+          python scripts/generate_data.py \
+            ${{ steps.prev_details.outputs.path && format('--previous {0}', steps.prev_details.outputs.path) || '' }} \
+            || echo "Data generation had issues; continuing."
 
       - name: Generate LEAP call candidates
         # Screens stocks.json + details.json, then fetches LEAP option chains.
         run: python scripts/generate_leaps.py || echo "LEAP generation had issues; continuing."
 
+      # The market-wide RVOL scan is the slowest, heaviest step (~10 min and
+      # thousands of Yahoo requests). Pre-market it has nothing new to measure
+      # — the day's volume hasn't happened yet — and re-running it would only
+      # add rate-limit pressure to the earnings fetch above. So the morning run
+      # reuses the file the live site is already serving, and falls back to a
+      # real scan if that can't be fetched or looks like sample data.
+      - name: Reuse published RVOL scan (pre-market run)
+        id: reuse_rvol
+        if: github.event.schedule == '30 10 * * 1-5'
+        continue-on-error: true
+        run: |
+          host="$(tr -d '[:space:]' < CNAME 2>/dev/null || true)"
+          if [ -n "$host" ] && curl -fsSL --max-time 60 "https://$host/data/rvol_scan.json" -o /tmp/rvol.json \
+             && python -c "import json,sys; d=json.load(open('/tmp/rvol.json')); sys.exit(0 if d.get('stocks') and not d.get('is_sample') else 1)"; then
+            mv /tmp/rvol.json data/rvol_scan.json
+            echo "reused=true" >> "$GITHUB_OUTPUT"
+            echo "Reused the published RVOL scan."
+          else
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+            echo "Published RVOL scan unusable; will run a fresh scan."
+          fi
+
       - name: Generate RVOL scanner data
         # Market-wide volume scan; tolerate flakiness so the deploy still ships.
+        if: steps.reuse_rvol.outputs.reused != 'true'
         run: python scripts/generate_rvol_scan.py || echo "RVOL scan had issues; continuing."
 
       - name: Upload site artifact

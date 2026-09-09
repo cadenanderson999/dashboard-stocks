@@ -38,7 +38,8 @@ import math
 import os
 import random
 import sys
-from datetime import datetime, timezone
+import time
+from datetime import date, datetime, timedelta, timezone
 
 # tickers.py lives next to this file.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -236,15 +237,60 @@ INFO_KEYS = [
 # How many recent quarters of earnings history to store.
 EARNINGS_QUARTERS = 6
 
+# Retries for Yahoo rate limiting (HTTP 429) inside the fundamentals fetch.
+# Without these a burst of 429s silently blanks out P/E, analyst targets and
+# earnings for a chunk of tickers on that day's run.
+FETCH_RETRIES = 3
+FETCH_BACKOFF = 2.0  # seconds; doubles each retry
+
+
+class _NeverRaised(Exception):
+    """Placeholder so retries degrade to a plain call if yfinance moves the
+    rate-limit exception; better than failing every ticker on an import."""
+
+
+def _rate_limit_error():
+    """yfinance's rate-limit exception class, resolved once and cached."""
+    global _RATE_LIMIT_EXC
+    if _RATE_LIMIT_EXC is None:
+        try:
+            from yfinance.exceptions import YFRateLimitError
+            _RATE_LIMIT_EXC = YFRateLimitError
+        except ImportError:
+            print("yfinance.exceptions.YFRateLimitError not found; "
+                  "rate-limit retries disabled.", file=sys.stderr)
+            _RATE_LIMIT_EXC = _NeverRaised
+    return _RATE_LIMIT_EXC
+
+
+_RATE_LIMIT_EXC = None
+
+
+def _with_retry(fn):
+    """Call ``fn()``; on a Yahoo rate-limit error back off and retry."""
+    exc = _rate_limit_error()
+    for attempt in range(FETCH_RETRIES):
+        try:
+            return fn()
+        except exc:
+            if attempt == FETCH_RETRIES - 1:
+                raise
+            time.sleep(FETCH_BACKOFF * (2 ** attempt) + random.random())
+
 
 def extract_earnings(ticker):
     """Recent quarterly revenue / net income / EPS from the income statement.
 
     Returns a list (newest first) of ``{period, revenue, net_income, eps}``.
     Best-effort: returns ``[]`` on any failure.
+
+    Note: Yahoo fills the income statement from the *filed* financials, which
+    typically land days to weeks after the earnings press release. The
+    ``earningsHistory`` module (see :func:`fetch_earnings_events`) carries the
+    headline EPS the same day, so the two are merged in :func:`merge_earnings`.
     """
     try:
-        df = ticker.quarterly_income_stmt
+        df = _with_retry(lambda: ticker.quarterly_income_stmt)
     except Exception:  # noqa: BLE001
         return []
     if df is None or getattr(df, "empty", True):
@@ -272,33 +318,262 @@ def extract_earnings(ticker):
     return rows
 
 
-def fetch_fundamentals(symbols):
+def _raw(v):
+    """Unwrap Yahoo's ``{"raw": x, "fmt": "..."}`` cells; pass plain values.
+
+    Always returns a plain Python number so the result stays JSON-serialisable
+    (the pandas fallback path in :func:`fetch_earnings_events` yields numpy
+    scalars, which ``json.dump`` refuses).
+    """
+    if isinstance(v, dict):
+        v = v.get("raw")
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    return v.item() if hasattr(v, "item") else v
+
+
+def fetch_earnings_events(ticker):
+    """Same-day earnings data from Yahoo's ``earningsHistory`` + ``calendarEvents``.
+
+    Unlike the income statement these are updated within hours of the
+    earnings release (they drive the "EPS vs estimate" panel on Yahoo's quote
+    page), so a company that reported last night shows up on this morning's
+    refresh.
+
+    Returns ``{"reported": [...], "dates": [...], "date_is_estimate": bool,
+    "eps_estimate": float|None, "revenue_estimate": float|None}`` where
+    ``reported`` is newest-first ``{period, eps, eps_estimate, surprise_pct}``
+    and ``dates`` are ISO dates of the upcoming report window. Best-effort:
+    returns an empty structure on any failure.
+    """
+    empty = {"reported": [], "dates": [], "date_is_estimate": False,
+             "eps_estimate": None, "revenue_estimate": None}
+    modules = "earningsHistory,calendarEvents"
+
+    def fetch():
+        # One quoteSummary call for both modules (the public ``earnings_history``
+        # and ``calendar`` properties would each cost a request). Fall back to
+        # those properties if this internal path ever changes shape.
+        try:
+            from yfinance.scrapers.quote import _QUOTE_SUMMARY_URL_
+            params = {"modules": modules, "corsDomain": "finance.yahoo.com",
+                      "formatted": "false", "symbol": ticker.ticker}
+            res = ticker._data.get_raw_json(  # noqa: SLF001
+                f"{_QUOTE_SUMMARY_URL_}/{ticker.ticker}", params=params)
+            return (res or {}).get("quoteSummary", {}).get("result") or [{}]
+        except (ImportError, AttributeError):
+            hist = ticker.earnings_history
+            cal = ticker.calendar or {}
+            history = [] if hist is None or hist.empty else [
+                {"quarter": {"fmt": idx.strftime("%Y-%m-%d")},
+                 "epsActual": {"raw": row.get("epsActual")},
+                 "epsEstimate": {"raw": row.get("epsEstimate")},
+                 "surprisePercent": {"raw": row.get("surprisePercent")}}
+                for idx, row in hist.iterrows()]
+            earnings = {
+                "earningsDate": [int(datetime.combine(d, datetime.min.time(),
+                                                      tzinfo=timezone.utc).timestamp())
+                                 for d in cal.get("Earnings Date", [])],
+                "earningsAverage": cal.get("Earnings Average"),
+                "revenueAverage": cal.get("Revenue Average"),
+            }
+            return [{"earningsHistory": {"history": history},
+                     "calendarEvents": {"earnings": earnings}}]
+
+    try:
+        result = _with_retry(fetch) or [{}]
+        node = result[0] or {}
+    except Exception:  # noqa: BLE001
+        return empty
+
+    reported = []
+    for item in (node.get("earningsHistory") or {}).get("history") or []:
+        q = item.get("quarter")
+        period = q.get("fmt") if isinstance(q, dict) else None
+        if not period and isinstance(q, dict) and _raw(q) is not None:
+            period = _ts_to_date(_raw(q))
+        eps = _raw(item.get("epsActual"))
+        if not period or eps is None:
+            continue  # future / unreported quarter
+        reported.append({
+            "period": period,
+            "eps": eps,
+            "eps_estimate": _raw(item.get("epsEstimate")),
+            "surprise_pct": _raw(item.get("surprisePercent")),
+        })
+    reported.sort(key=lambda r: r["period"], reverse=True)
+
+    earnings = (node.get("calendarEvents") or {}).get("earnings") or {}
+    dates = []
+    for d in earnings.get("earningsDate") or []:
+        iso = _ts_to_date(_raw(d))
+        if iso:
+            dates.append(iso)
+    return {
+        "reported": reported,
+        "dates": sorted(dates),
+        "date_is_estimate": bool(earnings.get("isEarningsDateEstimate")),
+        "eps_estimate": _raw(earnings.get("earningsAverage")),
+        "revenue_estimate": _raw(earnings.get("revenueAverage")),
+    }
+
+
+def _same_quarter(a, b, tol_days=10):
+    """True if two ISO period-end dates refer to the same fiscal quarter."""
+    try:
+        da = date.fromisoformat(a)
+        db = date.fromisoformat(b)
+    except (TypeError, ValueError):
+        return a == b
+    return abs((da - db).days) <= tol_days
+
+
+def merge_earnings(statement_rows, reported_rows):
+    """Merge income-statement quarters with same-day reported EPS.
+
+    ``statement_rows`` come from :func:`extract_earnings` (revenue, net income,
+    diluted EPS -- authoritative but slow to appear); ``reported_rows`` from
+    :func:`fetch_earnings_events` (headline EPS vs. estimate -- available the
+    day of the report). A quarter that has been reported but not yet filed
+    appears with revenue / net income ``None`` so the newest quarter is never
+    missing just because the 10-Q hasn't landed. Newest first, capped at
+    ``EARNINGS_QUARTERS``.
+    """
+    rows = []
+    for r in statement_rows or []:
+        rows.append({**r, "eps_estimate": None, "surprise_pct": None})
+
+    for rep in reported_rows or []:
+        match = next((r for r in rows if _same_quarter(r["period"], rep["period"])), None)
+        if match is None:
+            rows.append({"period": rep["period"], "revenue": None, "net_income": None,
+                         "eps": rep["eps"], "eps_estimate": rep["eps_estimate"],
+                         "surprise_pct": rep["surprise_pct"]})
+            continue
+        # Keep the statement's diluted EPS when present; the headline number is
+        # usually "adjusted" and the estimate/surprise pair belongs with it.
+        if match.get("eps") is None:
+            match["eps"] = rep["eps"]
+        match["eps_reported"] = rep["eps"]
+        match["eps_estimate"] = rep["eps_estimate"]
+        match["surprise_pct"] = rep["surprise_pct"]
+
+    rows.sort(key=lambda r: r["period"], reverse=True)
+    return rows[:EARNINGS_QUARTERS]
+
+
+def load_previous_details(path):
+    """Read a previously published ``details.json``; ``{}`` if unusable.
+
+    Used to carry earnings forward when a run gets rate-limited by Yahoo --
+    without it a throttled run silently replaces good earnings with blanks.
+    Sample payloads are ignored so fake data never leaks into a live build.
+    """
+    if not path:
+        return {}
+    try:
+        with open(path) as f:
+            payload = json.load(f)
+    except (OSError, ValueError) as exc:
+        print(f"Previous details unusable ({exc}); no backfill.", file=sys.stderr)
+        return {}
+    if payload.get("is_sample"):
+        print("Previous details are sample data; no backfill.", file=sys.stderr)
+        return {}
+    return payload.get("stocks") or {}
+
+
+def backfill_details(details, previous, today=None):
+    """Fill gaps in a fresh run from the last published data (in place).
+
+    A ticker whose fundamentals call was rate-limited comes back with no
+    earnings and no report date. Rather than publish that hole, reuse what the
+    site was already serving: quarters the new run is missing are merged back
+    in (fresh rows always win for the same quarter) and a still-future report
+    date is kept. Returns ``(quarters_restored, dates_restored)``.
+    """
+    if not previous:
+        return 0, 0
+    today = today or datetime.now(timezone.utc).date().isoformat()
+    quarters = dates = 0
+
+    for symbol, new in details.items():
+        old = previous.get(symbol)
+        if not old:
+            continue
+
+        old_rows = old.get("earnings") or []
+        if old_rows:
+            have = {r["period"] for r in new.get("earnings") or []}
+            missing = [r for r in old_rows if r.get("period") not in have]
+            if missing:
+                merged = (new.get("earnings") or []) + missing
+                merged.sort(key=lambda r: r.get("period") or "", reverse=True)
+                merged = merged[:EARNINGS_QUARTERS]
+                # Count only the carried-over rows that survived the cap.
+                kept = {id(r) for r in merged}
+                quarters += sum(1 for r in missing if id(r) in kept)
+                new["earnings"] = merged
+
+        if not new.get("next_earnings"):
+            old_next = old.get("next_earnings")
+            if old_next and old_next >= today:
+                new["next_earnings"] = old_next
+                new["next_earnings_is_estimate"] = old.get("next_earnings_is_estimate", False)
+                if new.get("next_eps_estimate") is None:
+                    new["next_eps_estimate"] = old.get("next_eps_estimate")
+                if new.get("next_revenue_estimate") is None:
+                    new["next_revenue_estimate"] = old.get("next_revenue_estimate")
+                dates += 1
+
+    if quarters or dates:
+        print(f"Backfilled {quarters} quarters and {dates} report dates "
+              f"from the previously published data.")
+    return quarters, dates
+
+
+def fetch_fundamentals(symbols, earnings=True):
     """Best-effort fundamentals per ticker via yfinance (threaded).
 
-    Returns ``{symbol: {"pe", "market_cap", "sector", "info": {...}}}`` where
-    ``info`` is a subset of yfinance's ``.info`` used by the detail page. Any
-    ticker that fails simply gets ``None`` values -- fundamentals never block the
-    technical ratings, which come from the (more reliable) price download.
+    Returns ``{symbol: {"pe", "market_cap", "sector", "info": {...},
+    "earnings": [...], "events": {...}}}`` where ``info`` is a subset of
+    yfinance's ``.info`` used by the detail page. Any ticker that fails simply
+    gets ``None`` values -- fundamentals never block the technical ratings,
+    which come from the (more reliable) price download.
+
+    ``earnings=False`` skips the income statement and earnings-calendar calls
+    (two of the four requests per ticker) for callers that only need P/E,
+    market cap and sector.
     """
     import yfinance as yf  # lazy import
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     print(f"Fetching fundamentals for {len(symbols)} tickers...")
+    blank = {"pe": None, "market_cap": None, "sector": None,
+             "info": {}, "earnings": [], "events": {}}
 
     def one(sym):
         try:
             tk = yf.Ticker(sym)
-            info = tk.info or {}
-            return sym, {
+            info = _with_retry(lambda: tk.info) or {}
+            d = {
                 "pe": info.get("trailingPE"),
                 "market_cap": info.get("marketCap"),
                 "sector": info.get("sector"),
                 "info": {k: info.get(k) for k in INFO_KEYS},
-                "earnings": extract_earnings(tk),
+                "earnings": [], "events": {},
             }
-        except Exception:  # noqa: BLE001
-            return sym, {"pe": None, "market_cap": None, "sector": None,
-                         "info": {}, "earnings": []}
+            if earnings:
+                events = fetch_earnings_events(tk)
+                d["earnings"] = merge_earnings(extract_earnings(tk), events["reported"])
+                d["events"] = events
+            return sym, d
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {sym}: fundamentals failed ({type(exc).__name__}: {exc})",
+                  file=sys.stderr)
+            return sym, dict(blank)
 
     out = {}
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -306,6 +581,17 @@ def fetch_fundamentals(symbols):
         for fut in as_completed(futures):
             sym, d = fut.result()
             out[sym] = d
+
+    # Surface silent gaps in the Action log: a spike here means Yahoo was
+    # rate-limiting us, not that the companies have no earnings.
+    no_info = sum(1 for d in out.values() if not d["info"])
+    print(f"Fundamentals: {len(out) - no_info}/{len(out)} tickers with info"
+          f", {no_info} without.")
+    if earnings:
+        no_earn = sum(1 for d in out.values() if not d["earnings"])
+        no_date = sum(1 for d in out.values() if not d["events"].get("dates"))
+        print(f"Earnings: {no_earn} tickers without quarterly history, "
+              f"{no_date} without a calendar date.")
     return out
 
 
@@ -394,9 +680,35 @@ def _ts_to_date(ts):
         return None
 
 
-def build_detail(info, earnings=None):
+def next_earnings_date(info, events=None, today=None):
+    """Pick the upcoming report date: calendar first, ``.info`` as fallback.
+
+    Yahoo's ``calendarEvents`` rolls forward to the next quarter within a day
+    of a report; the ``earningsTimestamp*`` fields in ``.info`` can lag for a
+    while. Dates already in the past (the company just reported and Yahoo
+    hasn't moved the date yet) are dropped rather than shown as "next".
+    """
+    info = info or {}
+    events = events or {}
+    today = today or datetime.now(timezone.utc).date().isoformat()
+
+    def first_future(dates):
+        return min((d for d in dates if d and d >= today), default=None)
+
+    # calendarEvents is authoritative here: it rolls forward within a day of a
+    # report, so trust it whenever it offers a future date.
+    from_calendar = first_future(events.get("dates") or [])
+    if from_calendar:
+        return from_calendar
+    # ``.info``'s earningsTimestamp* fields can lag by weeks -- fallback only.
+    return first_future([_ts_to_date(info.get(k))
+                         for k in ("earningsTimestampStart", "earningsTimestamp")])
+
+
+def build_detail(info, earnings=None, events=None, today=None):
     """Extended per-stock fundamentals for the detail page."""
     info = info or {}
+    events = events or {}
 
     def num(key, n=2):
         v = info.get(key)
@@ -406,9 +718,10 @@ def build_detail(info, earnings=None):
         v = info.get(key)
         return int(v) if isinstance(v, (int, float)) and not math.isnan(v) else None
 
-    next_earnings = _ts_to_date(
-        info.get("earningsTimestampStart") or info.get("earningsTimestamp")
-    )
+    next_earnings = next_earnings_date(info, events, today=today)
+
+    def fnum(v, n=2):
+        return round(v, n) if isinstance(v, (int, float)) and not math.isnan(v) else None
 
     return {
         "industry": info.get("industry"),
@@ -429,6 +742,10 @@ def build_detail(info, earnings=None):
         "avg_volume_10d": ival("averageVolume10days"),
         "shares_outstanding": ival("sharesOutstanding"),
         "next_earnings": next_earnings,
+        # True when Yahoo flags the date as a projection rather than confirmed.
+        "next_earnings_is_estimate": bool(next_earnings and events.get("date_is_estimate")),
+        "next_eps_estimate": fnum(events.get("eps_estimate")) if next_earnings else None,
+        "next_revenue_estimate": fnum(events.get("revenue_estimate"), 0) if next_earnings else None,
         "analyst": {
             "target_mean": num("targetMeanPrice"),
             "target_high": num("targetHighPrice"),
@@ -486,7 +803,7 @@ def download_prices(symbols, chunk=100, period=LOOKBACK):
     return out
 
 
-def fetch_live():
+def fetch_live(previous_path=None):
     """Fetch real data via yfinance. Returns list of records (may be empty)."""
     universe = build_universe()
     symbols = list(universe.keys())
@@ -514,7 +831,9 @@ def fetch_live():
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=meta.get("sector"), lists=meta.get("lists"),
         ))
-        details[symbol] = build_detail(f.get("info"), f.get("earnings"))
+        details[symbol] = build_detail(f.get("info"), f.get("earnings"), f.get("events"))
+
+    backfill_details(details, load_previous_details(previous_path))
 
     print(f"Built {len(records)} records ({skipped} tickers had no usable data).")
     return records, details
@@ -586,21 +905,34 @@ def generate_sample():
             "recommendationMean": round(rng.uniform(1.5, 3.5), 2),
             "earningsTimestampStart": 1786000000 + rng.randint(0, 90) * 86400,
         }
-        # Synthetic quarterly earnings history (newest first).
+        # Synthetic quarterly earnings history (newest first), shaped like the
+        # live merge: the newest quarter is "reported but not yet filed" (EPS
+        # vs. estimate only), older ones have full statement numbers.
         shares = info["sharesOutstanding"]
-        earnings = []
+        erng = random.Random(hash(symbol) & 0xFFFF)  # keep ``rng``'s draw order stable
+        statement, reported = [], []
         rev = market_cap * rng.uniform(0.15, 0.5)
         for q in range(EARNINGS_QUARTERS):
-            month = 3 * ((q + 1))
+            period = (date(2026, 9, 1) - timedelta(days=91 * q)).replace(day=28)
             ni = rev * rng.uniform(0.05, 0.25)
-            earnings.append({
-                "period": f"2025-{max(1, 12 - month % 12):02d}-28",
-                "revenue": rev,
-                "net_income": ni,
-                "eps": round(ni / shares, 2) if shares else None,
-            })
+            eps = round(ni / shares, 2) if shares else None
+            if q > 0:
+                statement.append({"period": period.isoformat(), "revenue": rev,
+                                  "net_income": ni, "eps": eps})
+            if q < 4 and eps is not None:
+                est = round(eps * erng.uniform(0.85, 1.1), 2)
+                reported.append({"period": period.isoformat(), "eps": eps,
+                                 "eps_estimate": est,
+                                 "surprise_pct": round((eps - est) / abs(est) * 100, 2) if est else None})
             rev *= rng.uniform(0.92, 0.99)  # older quarters slightly smaller
-        details[symbol] = build_detail(info, earnings)
+        earnings = merge_earnings(statement, reported)
+        next_iso = _ts_to_date(info["earningsTimestampStart"])
+        events = {"reported": reported, "dates": [next_iso],
+                  "date_is_estimate": erng.random() < 0.4,
+                  "eps_estimate": round(erng.uniform(0.2, 5), 2),
+                  "revenue_estimate": rev * erng.uniform(0.95, 1.1)}
+        # Sample data is deterministic, so pin "today" for the next-date logic.
+        details[symbol] = build_detail(info, earnings, events, today="2026-08-01")
     return records, details
 
 
@@ -663,6 +995,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="store_true",
                         help="write deterministic sample data (no network)")
+    parser.add_argument("--previous", metavar="PATH",
+                        help="previously published details.json; earnings "
+                             "missing from this run are carried over from it "
+                             "so a rate-limited fetch never blanks the site")
     args = parser.parse_args()
 
     if args.sample:
@@ -672,7 +1008,7 @@ def main():
         return 0
 
     try:
-        records, details = fetch_live()
+        records, details = fetch_live(args.previous)
     except Exception as exc:  # noqa: BLE001
         print(f"Live fetch raised: {exc}", file=sys.stderr)
         records, details = [], {}

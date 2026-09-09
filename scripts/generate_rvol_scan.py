@@ -254,7 +254,8 @@ def enrich(candidates, symbols_meta):
         return []
 
     prices = download_prices(syms)            # default 2y history
-    fundamentals = fetch_fundamentals(syms)   # pe, market_cap, sector
+    # pe, market_cap, sector only -- skip the earnings calls (half the requests).
+    fundamentals = fetch_fundamentals(syms, earnings=False)
     rs_ranks = scan_rs_ranks(prices)
 
     records = []

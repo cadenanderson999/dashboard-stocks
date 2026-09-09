@@ -299,23 +299,52 @@ function analystCard(a, price) {
   return `<section class="stat-card"><h3>Analyst targets</h3>${body}${targetBar(a, price)}</section>`;
 }
 
+// Beat / miss vs the analyst consensus, as a signed percentage.
+function surpriseCell(e) {
+  if (e.surprise_pct == null) return `<td class="num">\u2014</td>`;
+  const cls = e.surprise_pct > 0 ? "pos" : e.surprise_pct < 0 ? "neg" : "";
+  const sign = e.surprise_pct > 0 ? "+" : "";
+  return `<td class="num ${cls}">${sign}${fmt(e.surprise_pct, 1)}%</td>`;
+}
+
 function earningsSection(d) {
   const next = d.next_earnings;
   const hist = d.earnings || [];
   if (!next && !hist.length) return "";
-  const rows = hist.map((e) => `
-    <tr>
-      <td>${fmtDate(e.period)}</td>
+
+  const rows = hist.map((e) => {
+    // A quarter Yahoo has the headline EPS for but not yet the filed
+    // statement: show it rather than waiting weeks for revenue/net income.
+    const pending = e.revenue == null && e.net_income == null && e.eps != null;
+    return `
+    <tr${pending ? ` class="pending" title="Reported \u2014 full financials not filed yet"` : ""}>
+      <td>${fmtDate(e.period)}${pending ? ` <span class="muted">just reported</span>` : ""}</td>
       <td class="num">${fmtBig(e.revenue)}</td>
       <td class="num">${fmtBig(e.net_income)}</td>
-      <td class="num">${e.eps != null ? "$" + fmt(e.eps) : "—"}</td>
-    </tr>`).join("");
+      <td class="num">${e.eps != null ? "$" + fmt(e.eps) : "\u2014"}</td>
+      <td class="num">${e.eps_estimate != null ? "$" + fmt(e.eps_estimate) : "\u2014"}</td>
+      ${surpriseCell(e)}
+    </tr>`;
+  }).join("");
+
+  // Upcoming-report line: date (flagged when Yahoo only estimates it) plus the
+  // consensus the company will be measured against.
+  let nextLine = "";
+  if (next) {
+    const est = d.next_eps_estimate != null ? ` \u00b7 est. $${fmt(d.next_eps_estimate)} EPS` : "";
+    const rev = d.next_revenue_estimate != null ? ` on ${fmtBig(d.next_revenue_estimate)}` : "";
+    const approx = d.next_earnings_is_estimate ? " (est.)" : "";
+    nextLine = ` \u00b7 <span class="next-earn">Next report: ${fmtDate(next)}${approx}${est}${rev}</span>`;
+  }
+
   return `
     <section class="earnings-section">
-      <h3>Earnings${next ? ` · <span class="next-earn">Next report: ${fmtDate(next)}</span>` : ""}</h3>
+      <h3>Earnings${nextLine}</h3>
       ${hist.length ? `<div class="table-scroll"><table class="mini-table">
         <thead><tr><th>Quarter</th><th class="num">Revenue</th>
-          <th class="num">Net income</th><th class="num" title="Diluted EPS">EPS</th></tr></thead>
+          <th class="num">Net income</th><th class="num" title="Diluted EPS, or the reported headline EPS for a quarter that has not been filed yet">EPS</th>
+          <th class="num" title="Analyst consensus EPS for the quarter">Est.</th>
+          <th class="num" title="Beat (+) or miss (-) vs the consensus">Surprise</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`
         : `<p class="empty">No earnings history available.</p>`}
     </section>`;
