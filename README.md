@@ -285,7 +285,7 @@ The included workflow handles everything, but you must enable Pages once:
 2. Go to **Settings → Pages**.
 3. Under **Build and deployment → Source**, choose **GitHub Actions**.
 4. Open the **Actions** tab and run **“Update data & deploy to Pages”**
-   (or just wait for the daily schedule / next push to `main`).
+   with **refresh** enabled (or wait for the daily schedule).
 
 Your site will be published at
 `https://<your-username>.github.io/dashboard-stocks/`.
@@ -303,9 +303,16 @@ The workflow runs:
 ## Notes & caveats
 
 - Yahoo Finance is an unofficial/free data source; occasional flakiness or a
-  missing ticker is expected. The generator skips bad tickers and keeps going.
+  missing field is possible. The generator retains dated cached data and reports
+  acquisition failures without removing tracked tickers.
 - A 200-day EMA needs ~200 trading days of history; newly listed tickers will
   show limited indicators until they have enough data.
-- If a live fetch returns nothing (e.g. blocked network), the script writes
-  clearly-labelled **sample data** so the page still renders, and the site shows
-  a warning banner.
+- Failed live refreshes retain the last valid data; **sample data** is generated
+  only with explicit `--sample`. Production deployment rejects sample stocks.
+- The bounded Yahoo scanner rotates through up to 1,500 symbols per run and
+  reports partial coverage; it does not imply a complete daily market scan.
+- Pushes deploy saved data. Scheduled/manual refreshes collect new data. The
+  first deployment requires a manual refresh to create a real snapshot.
+
+See [data reliability and provider evaluation](docs/data-reliability.md) for
+refresh intervals, rate controls, recovery, coverage reports and bulk-feed options.

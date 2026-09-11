@@ -1,3 +1,5 @@
-yfinance>=0.2.40
+yfinance==1.7.0
 # pandas.read_html (used to fetch the live S&P 500 list) needs an HTML parser.
 lxml>=5.0
+# Exchange session dates, including holidays and early closes.
+exchange-calendars==4.13.2

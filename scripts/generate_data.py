@@ -25,9 +25,8 @@ Usage:
     python scripts/generate_data.py --sample    # write deterministic sample data
                                                 # (used when no network access)
 
-If a live fetch is attempted but fails for every ticker (e.g. the network is
-blocked), the script automatically falls back to writing sample data so the
-site still renders, and exits non-zero so CI surfaces the problem.
+Live failures retain cached data with freshness metadata. Sample data is only
+written when --sample is explicitly selected.
 """
 
 from __future__ import annotations
@@ -48,6 +47,7 @@ from tickers import (  # noqa: E402
     sp500_fallback_map,
 )
 import strategies as strat  # noqa: E402
+import market_data as md
 
 # Universe list labels.
 RH_LIST = "Robinhood 100"
@@ -143,7 +143,7 @@ def compute_rs_ranks(price_map):
     raw = {}
     for sym, p in price_map.items():
         closes = p.get("close") or []
-        if len(closes) > strat.YEAR:
+        if len(closes) > strat.YEAR and not p.get("quality", {}).get("stale"):
             raw[sym] = strat.weighted_rs_series(closes)[-1]
     return strat.percentile_ranks(raw)
 
@@ -241,12 +241,9 @@ def extract_earnings(ticker):
     """Recent quarterly revenue / net income / EPS from the income statement.
 
     Returns a list (newest first) of ``{period, revenue, net_income, eps}``.
-    Best-effort: returns ``[]`` on any failure.
+    Empty statements return ``[]``; acquisition exceptions reach the retry gateway.
     """
-    try:
-        df = ticker.quarterly_income_stmt
-    except Exception:  # noqa: BLE001
-        return []
+    df = ticker.quarterly_income_stmt
     if df is None or getattr(df, "empty", True):
         return []
 
@@ -272,40 +269,61 @@ def extract_earnings(ticker):
     return rows
 
 
-def fetch_fundamentals(symbols):
-    """Best-effort fundamentals per ticker via yfinance (threaded).
-
-    Returns ``{symbol: {"pe", "market_cap", "sector", "info": {...}}}`` where
-    ``info`` is a subset of yfinance's ``.info`` used by the detail page. Any
-    ticker that fails simply gets ``None`` values -- fundamentals never block the
-    technical ratings, which come from the (more reliable) price download.
-    """
-    import yfinance as yf  # lazy import
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    print(f"Fetching fundamentals for {len(symbols)} tickers...")
-
-    def one(sym):
-        try:
-            tk = yf.Ticker(sym)
-            info = tk.info or {}
-            return sym, {
-                "pe": info.get("trailingPE"),
-                "market_cap": info.get("marketCap"),
-                "sector": info.get("sector"),
-                "info": {k: info.get(k) for k in INFO_KEYS},
-                "earnings": extract_earnings(tk),
-            }
-        except Exception:  # noqa: BLE001
-            return sym, {"pe": None, "market_cap": None, "sector": None,
-                         "info": {}, "earnings": []}
-
+def fetch_fundamentals(symbols, include_earnings=True):
+    """Refresh independently cached profiles, metrics, analysts and statements."""
+    yf = md.yahoo()
+    cache = md.store()
+    profile_keys = {'longName', 'shortName', 'industry', 'website', 'country', 'sector'}
+    analyst_keys = {k for k in INFO_KEYS if k.startswith('target') or
+                    k.startswith('recommendation') or k == 'numberOfAnalystOpinions'}
     out = {}
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        futures = [ex.submit(one, s) for s in symbols]
-        for fut in as_completed(futures):
-            sym, d = fut.result()
-            out[sym] = d
+    for sym in symbols:
+        tk = yf.Ticker(sym)
+        # .info bundles profiles, quotes and analysts in one operation. Cache
+        # that response once, then refresh individual groups on their own TTL.
+        def info_response():
+            value = tk.info or {}
+            if not any(value.get(k) is not None for k in
+                       ('marketCap', 'currentPrice', 'regularMarketPrice', 'longName')):
+                raise md.FetchError('empty_response')
+            return value
+        groups = [('profile', profile_keys, md.staggered_ttl(sym, 28)),
+                  ('metrics', (set(INFO_KEYS) | {'trailingPE', 'marketCap'}) - profile_keys - analyst_keys, md.staggered_ttl(sym, 7)),
+                  ('analysts', analyst_keys, md.staggered_ttl(sym, 3))]
+        combined, quality = {}, {}
+        for group, keys, ttl in groups:
+            def get_group(keys=keys):
+                response, meta = cache.fetch(f'info:{sym}', info_response, 86400)
+                if meta['status'] in ('stale', 'missing'):
+                    raise md.FetchError(meta.get('reason', 'provider_error'))
+                return {k: response.get(k) for k in keys}
+            # The wrapper uses the same gateway; no additional Yahoo call is
+            # necessary if the shared .info response is already cached.
+            value, meta = cache.fetch(f'{group}:{sym}', get_group, ttl, network=False, preserve_none=True)
+            combined.update(value or {})
+            quality[group] = meta
+        earnings = []
+        if include_earnings:
+            force_earnings = False
+            ttl = md.staggered_ttl(sym, 7)
+            next_date = _ts_to_date(combined.get('earningsTimestampStart') or combined.get('earningsTimestamp'))
+            if next_date:
+                delta = abs((datetime.fromisoformat(next_date).date() - datetime.now(timezone.utc).date()).days)
+                if delta <= 7:
+                    ttl = 86400
+                    cached_date = cache.get(f'earnings:{sym}').get('updated_at')
+                    force_earnings = bool(cached_date and
+                        cache.clock() - datetime.fromisoformat(cached_date).timestamp() >= 86400)
+            earnings, quality['earnings'] = cache.fetch(
+                f'earnings:{sym}', lambda: extract_earnings(tk), ttl, force=force_earnings)
+        missing = {k: ('unavailable' if quality[g]['status'] in ('fresh', 'cached')
+                        else quality[g].get('reason', 'missing'))
+                   for g, keys, _ in groups for k in keys if combined.get(k) is None}
+        out[sym] = {'pe': combined.get('trailingPE'),
+                    'market_cap': combined.get('marketCap'),
+                    'sector': combined.get('sector'), 'info': combined,
+                    'earnings': earnings or [], 'quality': quality,
+                    'missing_fields': missing}
     return out
 
 
@@ -449,41 +467,8 @@ EMPTY_PRICES = {"dates": [], "close": [], "high": [], "low": [], "volume": []}
 
 
 def download_prices(symbols, chunk=100, period=LOOKBACK):
-    """Download daily OHLCV for many symbols, chunked to be API-friendly.
-
-    Returns ``{symbol: {"dates", "close", "high", "low", "volume"}}`` (empty
-    lists for failures).
-    """
-    import yfinance as yf  # imported lazily so --sample works without it
-
-    out = {}
-    for i in range(0, len(symbols), chunk):
-        part = symbols[i:i + chunk]
-        print(f"  downloading {i + 1}-{i + len(part)} of {len(symbols)}...")
-        data = yf.download(
-            tickers=part,
-            period=period,
-            interval="1d",
-            group_by="ticker",
-            auto_adjust=True,
-            threads=True,
-            progress=False,
-        )
-        for sym in part:
-            try:
-                df = data if len(part) == 1 else data[sym]
-                # Keep the columns aligned by dropping rows missing any of them.
-                sub = df[["Close", "High", "Low", "Volume"]].dropna()
-                out[sym] = {
-                    "dates": [d.strftime("%Y-%m-%d") for d in sub.index],
-                    "close": sub["Close"].tolist(),
-                    "high": sub["High"].tolist(),
-                    "low": sub["Low"].tolist(),
-                    "volume": sub["Volume"].tolist(),
-                }
-            except (KeyError, TypeError):
-                out[sym] = dict(EMPTY_PRICES)
-    return out
+    """Shared per-symbol cache. chunk retained for callers; no burst downloads."""
+    return {sym: md.price_history(sym, period) for sym in symbols}
 
 
 def fetch_live():
@@ -496,6 +481,8 @@ def fetch_live():
     fundamentals = fetch_fundamentals(symbols)
     rs_ranks = compute_rs_ranks(prices)
 
+    previous_doc = md.read_json(OUTPUT_PATH)
+    previous = {} if previous_doc.get('is_sample') else {r['symbol']: r for r in previous_doc.get('stocks', [])}
     records = []
     details = {}
     skipped = 0
@@ -503,7 +490,6 @@ def fetch_live():
         p = prices.get(symbol) or EMPTY_PRICES
         if not p["close"]:
             skipped += 1
-            continue
 
         meta = universe[symbol]
         f = fundamentals.get(symbol, {})
@@ -514,9 +500,24 @@ def fetch_live():
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=meta.get("sector"), lists=meta.get("lists"),
         ))
+        if not p['close'] and symbol in previous:
+            records[-1] = dict(previous[symbol])
+        rec = records[-1]
+        rec['data_quality'] = {'prices': p.get('quality', {}),
+                               'fundamentals': f.get('quality', {}),
+                               'missing_fields': f.get('missing_fields', {})}
+        rec['price_as_of'] = p.get('quality', {}).get('as_of') or rec.get('price_as_of')
+        rec['price_valid_until'] = md.price_valid_until()
+        if p.get('quality', {}).get('stale'):
+            rec.update(rating='Stale' if rec.get('price') is not None else 'No Data', score=None,
+                       rs_rank=None, setups=[], reason='Current price data unavailable; showing last known values.')
         details[symbol] = build_detail(f.get("info"), f.get("earnings"))
+        details[symbol]['data_quality'] = rec['data_quality']
 
     print(f"Built {len(records)} records ({skipped} tickers had no usable data).")
+    md.store().report('stocks')
+    if not any(r.get('price') is not None for r in records):
+        return [], {}
     return records, details
 
 
@@ -640,8 +641,7 @@ def write_output(records, is_sample):
     }
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(payload, f, indent=2)
+    md.atomic_json(OUTPUT_PATH, payload)
     print(f"Wrote {len(records)} records to {os.path.relpath(OUTPUT_PATH)} "
           f"(sample={is_sample})")
 
@@ -654,8 +654,7 @@ def write_details(details, is_sample):
         "stocks": details,
     }
     os.makedirs(os.path.dirname(DETAILS_PATH), exist_ok=True)
-    with open(DETAILS_PATH, "w") as f:
-        json.dump(payload, f, indent=2)
+    md.atomic_json(DETAILS_PATH, payload)
     print(f"Wrote {len(details)} detail entries to {os.path.relpath(DETAILS_PATH)}")
 
 
@@ -678,11 +677,8 @@ def main():
         records, details = [], {}
 
     if not records:
-        print("Live fetch produced no data — falling back to sample.",
-              file=sys.stderr)
-        records, details = generate_sample()
-        write_output(records, is_sample=True)
-        write_details(details, is_sample=True)
+        print("Live fetch produced no data; retaining previous output.", file=sys.stderr)
+        md.store().report('stocks')
         return 1
 
     write_output(records, is_sample=False)

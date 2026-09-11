@@ -39,11 +39,11 @@ import math
 import os
 import random
 import sys
-import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import strategies as strat  # noqa: E402
+import market_data as md
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 STOCKS_PATH = os.path.join(DATA_DIR, "stocks.json")
@@ -59,13 +59,11 @@ MAX_CHAINS = LEAP_BUY_MAX + WATCH_MAX   # every listed name gets its chain
 RISK_FREE = 0.04          # annual risk-free rate used for delta
 MIN_OI = 25               # open-interest floor for "liquid" contracts
 MAX_SPREAD = 0.20         # bid/ask spread as a fraction of mid
-MAX_WORKERS = 3           # gentle on Yahoo
-RETRY_DELAY = 3.0         # seconds before retrying a rate-limited chain fetch
 CANDIDATE_FIELDS = [
     "symbol", "name", "sector", "lists", "price", "change_pct", "market_cap",
     "pe", "rating", "score", "rs_rank", "tt_pass", "hv60", "sma200",
     "sma200_rising", "timing", "trend", "setups", "pct_off_high", "ret_6m",
-    "mom_12_1", "rsi",
+    "mom_12_1", "rsi", "price_valid_until", "price_as_of", "data_quality",
 ]
 
 
@@ -84,6 +82,8 @@ def screen(stocks, details):
     """Score every stock; return the sorted LEAP Buy / Watch candidates."""
     out = []
     for s in stocks:
+        if s.get('data_quality', {}).get('prices', {}).get('stale'):
+            continue
         d = (details or {}).get(s["symbol"]) or {}
         ls = strat.leap_score(s, d)
         if not ls or not ls["leap_rating"]:
@@ -124,61 +124,45 @@ def _dte(expiry, today):
 
 
 def fetch_chain(symbol, today):
-    """Fetch LEAP call chains for one ticker via yfinance.
-
-    Returns ``(status, chains)`` where chains is
-    ``[{"expiry", "dte", "calls": [...]}, ...]``.
-    """
-    import yfinance as yf
-
-    expiries = None
-    for attempt in range(2):
-        try:
-            tk = yf.Ticker(symbol)
-            expiries = list(tk.options or [])
-            break
-        except Exception as exc:  # noqa: BLE001
-            if attempt == 0 and "rate" in str(exc).lower():
-                time.sleep(RETRY_DELAY)
-                continue
-            return "error", []
-    if expiries is None:
-        return "error", []
+    """Cache expiry discovery separately from chain quotes; keep failure reasons."""
+    yf = md.yahoo()
+    cache = md.store()
+    tk = yf.Ticker(symbol)
+    expiries, expiry_meta = cache.fetch(f'expiries:{symbol}',
+        lambda: list(tk.options or []), 86400)
+    if expiry_meta['status'] in ('stale', 'missing'):
+        return 'error', [], expiry_meta
     leaps = [(e, _dte(e, today)) for e in expiries]
     leaps = [(e, d) for e, d in leaps if d is not None and d >= LEAP_MIN_DTE]
     if not leaps:
-        return "no_leaps", []
+        return 'no_leaps', [], expiry_meta
     leaps.sort(key=lambda x: x[1])
     chosen = [leaps[0]] + ([leaps[-1]] if len(leaps) > 1 and MAX_EXPIRIES > 1 else [])
-
-    chains = []
+    chains, metas = [], []
     for expiry, dte in chosen:
-        calls = None
-        for attempt in range(2):
-            try:
-                calls = tk.option_chain(expiry).calls
-                break
-            except Exception as exc:  # noqa: BLE001
-                if attempt == 0 and "rate" in str(exc).lower():
-                    time.sleep(RETRY_DELAY)
-                    continue
-        if calls is None:
-            continue
-        rows = []
-        for _, c in calls.iterrows():
-            def num(key):
-                v = c.get(key)
-                return float(v) if v is not None and v == v else None
-            rows.append({
-                "strike": num("strike"), "bid": num("bid"), "ask": num("ask"),
-                "last": num("lastPrice"), "iv": num("impliedVolatility"),
-                "oi": int(num("openInterest") or 0), "volume": int(num("volume") or 0),
-                "contract": str(c.get("contractSymbol") or ""),
-            })
-        if rows:
-            chains.append({"expiry": expiry, "dte": dte, "calls": rows})
-        time.sleep(0.3)
-    return ("ok" if chains else "error"), chains
+        def acquire(expiry=expiry):
+            calls = tk.option_chain(expiry).calls
+            rows = []
+            for _, c in calls.iterrows():
+                def num(key):
+                    v = c.get(key)
+                    return float(v) if v is not None and math.isfinite(float(v)) else None
+                rows.append({
+                    'strike': num('strike'), 'bid': num('bid'), 'ask': num('ask'),
+                    'last': num('lastPrice'), 'iv': num('impliedVolatility'),
+                    'oi': int(num('openInterest') or 0), 'volume': int(num('volume') or 0),
+                    'contract': str(c.get('contractSymbol') or ''),
+                })
+            return rows
+        calls, meta = cache.fetch(f'chain:{symbol}:{expiry}', acquire, 6 * 3600)
+        metas.append(meta)
+        if meta['status'] not in ('stale', 'missing') and calls:
+            chains.append({'expiry': expiry, 'dte': dte, 'calls': calls})
+    failed = next((m for m in metas if m['status'] in ('stale', 'missing')), None)
+    if failed:
+        return 'error', [], failed
+    return 'ok', chains, {'status': 'fresh',
+                          'updated_at': min(m['updated_at'] for m in metas)}
 
 
 def synthetic_chain(cand, today, rng):
@@ -248,21 +232,28 @@ def fill_contracts(candidates, sample, today):
             attach_contracts(c, synthetic_chain(c, today, rng), "ok")
         return True
 
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    targets = candidates[:MAX_CHAINS]
-    print(f"Fetching LEAP option chains for {len(targets)} candidates...")
+    cache = md.store()
     ok = 0
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        futs = {ex.submit(fetch_chain, c["symbol"], today): c for c in targets}
-        for fut in as_completed(futs):
-            c = futs[fut]
-            try:
-                status, chains = fut.result()
-            except Exception:  # noqa: BLE001
-                status, chains = "error", []
-            attach_contracts(c, chains, status)
-            ok += status == "ok"
-    print(f"  {ok}/{len(targets)} chains fetched.")
+    for c in candidates[:MAX_CHAINS]:
+        status, chains, meta = fetch_chain(c['symbol'], today)
+        c['chain_quality'] = meta
+        c['chain_as_of'] = meta.get('updated_at')
+        c['valid_until'] = min(c.get('price_valid_until') or md.price_valid_until(),
+            (datetime.fromisoformat(c['chain_as_of']) + timedelta(hours=6)).isoformat()
+            if c['chain_as_of'] else datetime.now(timezone.utc).isoformat())
+        attach_contracts(c, chains, status)
+        key = f'contract_snapshot:{c["symbol"]}'
+        if status == 'ok':
+            cache.put(key, {'contracts': c['contracts'], 'as_of': c['chain_as_of'],
+                            'underlying_price': c['price']})
+            ok += 1
+        elif status == 'error':
+            previous = cache.get(key)
+            c['historical_contracts'] = previous.get('contracts', [])
+            c['historical_as_of'] = previous.get('as_of')
+            c['historical_underlying_price'] = previous.get('underlying_price')
+    cache.report('options')
+    print(f'  {ok}/{len(candidates)} chains fetched or current in cache.')
     return ok > 0
 
 
@@ -285,8 +276,7 @@ def write_output(candidates, is_sample, chains_ok):
         "candidates": candidates,
     }
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(payload, f, indent=2)
+    md.atomic_json(OUTPUT_PATH, payload)
     print(f"Wrote {len(candidates)} LEAP candidates "
           f"({payload['buy_count']} LEAP Buy) to {os.path.relpath(OUTPUT_PATH)} "
           f"(sample={is_sample})")
@@ -304,9 +294,12 @@ def main():
         print("data/stocks.json missing — run generate_data.py first.", file=sys.stderr)
         return 1
     details_doc = load_json(DETAILS_PATH) or {}
-    is_sample = bool(args.sample or stocks_doc.get("is_sample"))
-    if is_sample and not args.sample:
-        print("stocks.json is sample data — generating synthetic chains too.")
+    is_sample = bool(args.sample)
+    if stocks_doc.get('is_sample') and not args.sample:
+        print('Refusing to screen sample stocks in a production run.', file=sys.stderr)
+        return 1
+    if details_doc.get('is_sample') and not args.sample:
+        details_doc = {}
 
     candidates = screen(stocks_doc.get("stocks", []), details_doc.get("stocks", {}))
     print(f"Screened {len(stocks_doc.get('stocks', []))} stocks -> "

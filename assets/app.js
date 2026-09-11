@@ -47,7 +47,7 @@ async function loadLeaps() {
     const res = await fetch("data/leaps.json", { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
-    (data.candidates || []).forEach((c) => { LEAPS[c.symbol] = c.leap_rating; });
+    (data.candidates || []).map(c => DataQuality.option(c, data)).filter(c => c.leap_rating !== "Stale").forEach((c) => { LEAPS[c.symbol] = c.leap_rating; });
   } catch { /* LEAP badges are optional */ }
 }
 
@@ -57,7 +57,8 @@ async function load() {
     const res = await fetch("data/stocks.json", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    STOCKS = data.stocks || [];
+    STOCKS = (data.stocks || []).map(s => DataQuality.stock(s));
+    DataQuality.banner(data);
 
     populateSectorFilter(data.sectors || []);
 
@@ -183,7 +184,7 @@ function render() {
       return `
         <tr>
           <td class="ticker">${star}<a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
-          <td class="num" data-label="Price">$${fmt(s.price)}</td>
+          <td class="num" data-label="Price">$${fmt(s.price)}${DataQuality.price(s)}</td>
           <td class="num ${chgCls}" data-label="Day %">${chgStr}</td>
           <td class="num" data-label="Mkt Cap">${fmtMarketCap(s.market_cap)}</td>
           <td class="num" data-label="P/E">${fmt(s.pe, 1)}</td>

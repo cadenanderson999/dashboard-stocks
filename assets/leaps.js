@@ -63,7 +63,8 @@ async function load() {
     const res = await fetch("data/leaps.json", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    CANDS = data.candidates || [];
+    CANDS = (data.candidates || []).map(c => DataQuality.option(c, data));
+    DataQuality.banner(data);
     if (data.is_sample) document.getElementById("sample-banner").classList.remove("hidden");
     if (data.chains_available === false && CANDS.length) {
       document.getElementById("chain-banner").classList.remove("hidden");
@@ -113,6 +114,10 @@ function checkRow(name, c) {
 }
 
 function contractsTable(c) {
+  if (!c.contracts?.length && c.historical_contracts?.length) {
+    return `<p class="banner">Historical snapshot from ${esc(c.historical_as_of)}. Prices and calculations belong to that snapshot.</p>` +
+      contractsTable({ ...c, contracts: c.historical_contracts, historical_contracts: [] });
+  }
   const rows = c.contracts || [];
   if (!rows.length) {
     const msg = c.chain_status === "no_leaps"
@@ -142,6 +147,7 @@ function contractsTable(c) {
       </tr>`;
   }).join("");
   return `
+    <p class="muted small">Quote snapshot: ${esc(c.chain_as_of || c.historical_as_of || "sample")}</p>
     <div class="table-scroll mini-scroll">
       <table class="mini-table contracts">
         <thead><tr>
@@ -189,7 +195,7 @@ function card(c) {
         <div class="stock-price-box">
           <div class="stock-price">$${fmt(c.price)} <span class="stock-change ${chgCls}">${pct(chg, 2)}</span></div>
           <div><span class="pill ${isBuy ? "pill-strong-buy" : "pill-hold"}">${esc(c.leap_rating)}</span>
-            <span class="score-num">${c.leap_score}/100</span></div>
+            <span class="score-num">${c.leap_score ?? "—"}/100</span></div>
         </div>
       </div>
       <div class="leap-body">
@@ -214,7 +220,7 @@ function render() {
   const buy = CANDS.filter((c) => c.leap_rating === "LEAP Buy").length;
   const withContracts = CANDS.filter((c) => (c.contracts || []).length).length;
   document.getElementById("summary").innerHTML = [
-    ["LEAP Buy", buy, "pos"], ["Watch", CANDS.length - buy, ""],
+    ["LEAP Buy", buy, "pos"], ["Watch", CANDS.filter(c => c.leap_rating === "Watch").length, ""],
     ["With contracts", withContracts, ""],
   ].map(([l, n, cls]) =>
     `<div class="card"><div class="n ${cls}">${n}</div><div class="l">${l}</div></div>`).join("");
