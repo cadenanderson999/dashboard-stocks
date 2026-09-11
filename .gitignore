@@ -10,3 +10,7 @@ env/
 .idea/
 .vscode/
 *.swp
+
+# Persistent acquisition state; never publish provider caches.
+.cache/
+_site/

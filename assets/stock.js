@@ -75,9 +75,11 @@ async function load() {
   ]);
 
   const find = (d) => d && d.stocks && d.stocks.find((s) => s.symbol === SYMBOL);
-  const signal = find(signals) || find(scan);
+  const found = find(signals) || find(scan);
+  const signal = found ? DataQuality.stock(found) : null;
+  DataQuality.banner(signals || scan || {});
   const detail = details && details.stocks ? details.stocks[SYMBOL] : null;
-  LEAP = leaps && leaps.candidates ? leaps.candidates.find((c) => c.symbol === SYMBOL) : null;
+  LEAP = leaps && leaps.candidates ? leaps.candidates.map(c => DataQuality.option(c, leaps)).find((c) => c.symbol === SYMBOL) : null;
 
   const isSample =
     (signals && signals.is_sample) || (details && details.is_sample);
@@ -374,7 +376,8 @@ function leapCard(s, leap) {
   const checks = Object.entries(leap.checks || {}).map(([k, c]) =>
     `<div class="stat"><span class="stat-l">${titleCase(k)} <span class="muted">${c.detail}</span></span>` +
     `<span class="stat-v">${c.points}/${c.max}</span></div>`).join("");
-  const rows = (leap.contracts || []).map((c) => `
+  const historical = !leap.contracts?.length && leap.historical_contracts?.length;
+  const rows = (historical ? leap.historical_contracts : leap.contracts || []).map((c) => `
     <tr>
       <td><strong>${c.role}</strong></td>
       <td data-label="Expiry">${fmtDate(c.expiry)} <span class="muted">(${c.dte}d)</span></td>
@@ -389,8 +392,9 @@ function leapCard(s, leap) {
   return `
     <section class="stat-card leap-card">
       <h3>LEAP calls · <span class="pill ${cls}">${leap.leap_rating}</span>
-        <span class="score-num">${leap.leap_score}/100</span></h3>
+        <span class="score-num">${leap.leap_score ?? "—"}/100</span></h3>
       ${checks}
+      <p class="muted small">${historical ? "Historical snapshot" : "Quote snapshot"}: ${DataQuality.esc(historical ? leap.historical_as_of : leap.chain_as_of || "unavailable")}</p>
       ${rows ? `<div class="table-scroll mini-scroll"><table class="mini-table contracts">
         <thead><tr><th>Style</th><th>Expiry</th><th class="num">Strike</th>
           <th class="num">Mid (bid–ask)</th><th class="num">Δ</th><th class="num">IV</th>
@@ -425,6 +429,8 @@ function render(el, s, d) {
     ? fmt((d.dividend_rate / s.price) * 100, 2) + "%" : "—";
 
   el.innerHTML = `
+    ${DataQuality.price(s)}
+    ${DataQuality.details(s)}
     <div class="stock-head">
       <div>
         <div class="stock-symbol"><span id="detail-star"></span>${s.symbol}</div>

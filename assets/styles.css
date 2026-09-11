@@ -767,3 +767,5 @@ body { -webkit-tap-highlight-color: transparent; }
   .summary .card .n { font-size: 1.05rem; }
   .summary .card .l { font-size: 0.5rem; letter-spacing: 0; }
 }
+
+.data-freshness { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 400; }

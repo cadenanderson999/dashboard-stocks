@@ -22,7 +22,6 @@ import json
 import os
 import random
 import sys
-import time
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -37,10 +36,10 @@ from generate_data import (  # noqa: E402
     fetch_fundamentals,
 )
 import strategies as strat  # noqa: E402
+import market_data as md
 
 # Scan parameters.
 SCAN_PERIOD = "3mo"          # enough history for a 50-day average + today
-SCAN_CHUNK = 250             # tickers per batched download
 RVOL_THRESHOLD = 2.0         # surface names trading above this RVOL
 MIN_PRICE = 1.0              # liquidity filter: ignore sub-$1 names
 MIN_AVG_VOL = 50_000         # liquidity filter: >= 50k avg daily shares
@@ -159,58 +158,45 @@ def fetch_symbols():
 # --------------------------------------------------------------------------- #
 # Scan
 # --------------------------------------------------------------------------- #
-def _chunks(seq, n):
-    for i in range(0, len(seq), n):
-        yield seq[i:i + n]
-
-
 def scan_candidates(symbols_meta):
     """First pass: find liquid tickers whose today's RVOL exceeds the threshold.
 
     Light + fast (3 months of volume only). Returns ``[{symbol, rvol}, ...]``.
     """
-    import yfinance as yf
-
-    symbols = list(symbols_meta.keys())
-    print(f"Scanning {len(symbols)} symbols ({SCAN_PERIOD} daily volume)...")
-
+    symbols = list(symbols_meta)
+    cache = md.store()
+    # Rotate the scan to avoid starving the same tail when a run hits its budget.
+    cursor = cache.get('scanner_cursor').get('offset', 0) % max(1, len(symbols))
+    symbols = symbols[cursor:] + symbols[:cursor]
     candidates = []
-    for idx, chunk in enumerate(_chunks(symbols, SCAN_CHUNK)):
-        print(f"  batch {idx + 1}: {chunk[0]}..{chunk[-1]}")
-        try:
-            data = yf.download(
-                tickers=chunk, period=SCAN_PERIOD, interval="1d",
-                group_by="ticker", auto_adjust=True, threads=True, progress=False,
-            )
-        except Exception as exc:  # noqa: BLE001
-            print(f"    batch failed: {exc}", file=sys.stderr)
+    checked = 0
+    attempted = 0
+    max_symbols = int(os.getenv('SCAN_MAX_SYMBOLS', '1500'))
+    for sym in symbols[:max_symbols]:
+        p = md.price_history(sym, SCAN_PERIOD)
+        attempted += 1
+        if p['quality']['stale']:
+            if p['quality'].get('reason') in ('budget_exhausted', 'provider_cooldown'):
+                break
             continue
-
-        for sym in chunk:
-            try:
-                df = data if len(chunk) == 1 else data[sym]
-                sub = df[["Close", "Volume"]].dropna()
-                closes = sub["Close"].tolist()
-                volumes = sub["Volume"].tolist()
-            except (KeyError, TypeError):
-                continue
-
-            if len(volumes) < RVOL_AVG_WINDOW + 1:
-                continue
-
-            price = closes[-1]
-            avg_vol = sum(volumes[-(RVOL_AVG_WINDOW + 1):-1]) / RVOL_AVG_WINDOW
-            # Liquidity filters keep RVOL meaningful (microcaps are noisy).
-            if price < MIN_PRICE or avg_vol < MIN_AVG_VOL:
-                continue
-
-            rvol = rvol_stats(volumes)["rvol_today"]
-            if rvol is None or rvol < RVOL_THRESHOLD:
-                continue
-
-            candidates.append({"symbol": sym, "rvol": rvol})
-
-        time.sleep(1)  # be gentle on Yahoo between batches
+        checked += 1
+        closes, volumes = p['close'], p['volume']
+        if len(volumes) < RVOL_AVG_WINDOW + 1:
+            cache.events.append({'key': f'scan:{sym}', 'status': 'excluded',
+                                 'reason': 'insufficient_history'})
+            continue
+        avg_vol = sum(volumes[-(RVOL_AVG_WINDOW + 1):-1]) / RVOL_AVG_WINDOW
+        if closes[-1] < MIN_PRICE or avg_vol < MIN_AVG_VOL:
+            continue
+        rvol = rvol_stats(volumes)['rvol_today']
+        if rvol is not None and rvol >= RVOL_THRESHOLD:
+            candidates.append({'symbol': sym, 'rvol': rvol})
+    cache.put('scanner_cursor', {'offset': (cursor + attempted) % max(1, len(symbols))})
+    global SCAN_COVERAGE
+    SCAN_COVERAGE = {'universe': len(symbols), 'attempted': attempted,
+                     'current': checked, 'partial': checked < len(symbols)}
+    if not checked:
+        raise md.FetchError('scan_unavailable')
 
     candidates.sort(key=lambda c: c["rvol"], reverse=True)
     print(f"Found {len(candidates)} liquid names with RVOL > {RVOL_THRESHOLD}; "
@@ -228,7 +214,9 @@ def scan_rs_ranks(prices):
     reference = []
     try:
         with open(STOCKS_PATH) as f:
-            reference = [s.get("rs_raw") for s in json.load(f).get("stocks", [])]
+            doc = json.load(f)
+            reference = [] if doc.get('is_sample') else [s.get('rs_raw') for s in doc.get('stocks', [])
+                if not s.get('data_quality', {}).get('prices', {}).get('stale')]
     except (OSError, ValueError):
         pass
     reference = [v for v in reference if v is not None]
@@ -254,14 +242,14 @@ def enrich(candidates, symbols_meta):
         return []
 
     prices = download_prices(syms)            # default 2y history
-    fundamentals = fetch_fundamentals(syms)   # pe, market_cap, sector
+    fundamentals = fetch_fundamentals(syms, include_earnings=False)   # pe, market_cap, sector
     rs_ranks = scan_rs_ranks(prices)
 
     records = []
     for sym in syms:
         p = prices.get(sym) or {}
         closes = p.get("close") or []
-        if not closes:
+        if not closes or p.get("quality", {}).get("stale"):
             continue
         f = fundamentals.get(sym, {})
         u = universe.get(sym, {})
@@ -274,6 +262,9 @@ def enrich(candidates, symbols_meta):
             pe=f.get("pe"), market_cap=f.get("market_cap"),
             sector=sector, lists=u.get("lists"),
         )
+        rec['price_valid_until'] = md.price_valid_until()
+        rec['price_as_of'] = p.get('quality', {}).get('as_of')
+        rec['data_quality'] = {'prices': p.get('quality', {}), 'fundamentals': f.get('quality', {})}
         rec["exchange"] = meta.get("exchange") or ""
         records.append(rec)
 
@@ -336,11 +327,15 @@ def generate_sample():
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
+SCAN_COVERAGE = {}
+
+
 def write_output(records, is_sample):
     records.sort(key=lambda r: (r.get("rvol_today") or 0), reverse=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "is_sample": is_sample,
+        "coverage": {} if is_sample else SCAN_COVERAGE,
         "params": {
             "rvol_threshold": RVOL_THRESHOLD,
             "avg_window": RVOL_AVG_WINDOW,
@@ -353,8 +348,7 @@ def write_output(records, is_sample):
         "stocks": records,
     }
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(payload, f, indent=2)
+    md.atomic_json(OUTPUT_PATH, payload)
     print(f"Wrote {len(records)} records to {os.path.relpath(OUTPUT_PATH)} "
           f"(sample={is_sample})")
 
@@ -383,14 +377,18 @@ def main():
         records = enrich(candidates, symbols_meta)
     except Exception as exc:  # noqa: BLE001
         print(f"Scan failed: {exc}", file=sys.stderr)
-        records = []
-
-    if not records:
-        print("No live results — writing sample so the page still renders.",
-              file=sys.stderr)
-        write_output(generate_sample(), is_sample=True)
+        md.store().report('scanner')
         return 1
 
+    if candidates and not records:
+        print('Enrichment failed; retaining previous scanner output.', file=sys.stderr)
+        md.store().report('scanner')
+        return 1
+    # Zero hits in a successfully checked universe is a legitimate result.
+    SCAN_COVERAGE['candidates'] = len(candidates)
+    SCAN_COVERAGE['enriched'] = len(records)
+    SCAN_COVERAGE['partial'] |= len(records) < len(candidates)
+    md.store().report('scanner')
     write_output(records, is_sample=False)
     return 0
 
