@@ -130,16 +130,17 @@ function contractsTable(c) {
   let lastExp = null;
   const body = rows.map((k) => {
     const sep = k.expiry !== lastExp
-      ? `<tr class="exp-row"><td colspan="10">Expiry ${fmtDate(k.expiry)} · ${k.dte} days</td></tr>` : "";
+      ? `<tr class="exp-row"><td colspan="11">Expiry ${fmtDate(k.expiry)} · ${k.dte} days</td></tr>` : "";
     lastExp = k.expiry;
     return sep + `
       <tr class="${k.liquid ? "" : "illiquid"}" title="${esc(k.why || "")}">
         <td><strong>${esc(k.role)}</strong><span class="muted small"> Δ≈${k.target_delta}</span></td>
         <td class="num" data-label="Strike">$${fmt(k.strike, k.strike % 1 ? 2 : 0)}</td>
-        <td class="num" data-label="Mid (bid–ask)">$${fmt(k.mid)}<span class="muted small"> ${fmt(k.bid)}–${fmt(k.ask)}</span></td>
+        <td class="num" data-label="Premium (bid–ask)">$${fmt(k.mid)}<span class="muted small">${k.premium_source === "last_trade" || !(k.bid > 0 && k.ask >= k.bid) ? "Last trade fallback" : "Midpoint"} · last trade ${esc(k.last_trade_at || "time unavailable")}</span><span class="muted small"> ${fmt(k.bid)}–${fmt(k.ask)}</span></td>
         <td class="num" data-label="Cost / contract">$${fmt(k.cost, 0)}</td>
         <td class="num" data-label="Delta">${fmt(k.delta)}</td>
         <td class="num" data-label="Implied vol">${fmt(k.iv, 0)}%</td>
+        <td class="num" data-label="Spread / mid">${Number.isFinite(k.bid) && k.bid > 0 && Number.isFinite(k.ask) && k.ask >= k.bid && k.mid > 0 ? fmt(100 * (k.ask-k.bid)/k.mid, 1) + "%" : "Unavailable"}</td>
         <td class="num" data-label="Open interest">${k.oi ?? "—"}${k.liquid ? "" : ' <span class="neg" title="Low open interest or wide spread">!</span>'}</td>
         <td class="num" data-label="Breakeven">$${fmt(k.breakeven)}<span class="muted small"> ${pct(k.breakeven_pct)}</span></td>
         <td class="num" data-label="Time value">${fmt(k.extrinsic_pct, 1)}%</td>
@@ -147,14 +148,15 @@ function contractsTable(c) {
       </tr>`;
   }).join("");
   return `
-    <p class="muted small">Quote snapshot: ${esc(c.chain_as_of || c.historical_as_of || "sample")}</p>
+    <p class="muted small">Breakeven is at expiration using the displayed premium; midpoint is an estimate, not a guaranteed fill. Marked contracts have low open interest or wide spreads. Earnings: ${esc(c.next_earnings || "date unavailable")}.</p>
+    <p class="muted small">Chain retrieved: ${esc(c.chain_as_of || c.historical_as_of || "unknown")} · individual quote times may be older.</p>
     <div class="table-scroll mini-scroll">
       <table class="mini-table contracts">
         <thead><tr>
-          <th>Style</th><th class="num">Strike</th><th class="num">Mid (bid–ask)</th>
+          <th>Style</th><th class="num">Strike</th><th class="num">Premium (bid–ask)</th>
           <th class="num" title="Premium per contract (×100)">Cost</th>
           <th class="num" title="Black-Scholes delta">Δ</th><th class="num" title="Implied volatility">IV</th>
-          <th class="num" title="Open interest">OI</th><th class="num">Breakeven</th>
+          <th class="num">Spread / mid</th><th class="num" title="Open interest">OI</th><th class="num">Breakeven</th>
           <th class="num" title="Time value as % of the share price — what you pay for the option's duration">Time value</th>
           <th class="num" title="Share price ÷ premium">Lev.</th>
         </tr></thead>

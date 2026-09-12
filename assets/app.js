@@ -69,6 +69,7 @@ async function load() {
       const d = new Date(data.generated_at);
       document.getElementById("updated-at").textContent = d.toLocaleString();
     }
+    renderBriefing();
     render();
   } catch (err) {
     document.getElementById("stock-body").innerHTML =
@@ -195,7 +196,7 @@ function render() {
           <td class="num ${rvolCls}" data-label="RVOL 30d">${fmt(s.rvol_mean)}×</td>
           <td class="num ${surgeCls}" data-label="Surge">${surgeStr}</td>
           <td class="sector-cell" data-label="Sector">${s.sector || "—"}</td>
-          <td data-label="Rating" title="${setups}">${pill(s.rating)}${scoreNum(s.score)}${leapBadge(s.symbol)}</td>
+          <td data-label="Rating" title="${setups}">${DataQuality.explanation(s, pill(s.rating) + scoreNum(s.score))}${DataQuality.confidence(s)}${leapBadge(s.symbol)}</td>
         </tr>`;
     })
     .join("");
@@ -351,3 +352,22 @@ FILTER = RangeFilters.create({
 });
 
 load();
+
+function renderBriefing() {
+  const current = STOCKS.filter(s => Number.isFinite(s.score));
+  const changed = current.filter(s => Number.isFinite(s.previous_signal?.score));
+  const buys = new Set(["Buy", "Strong Buy"]);
+  const link = (s, text) => `<li><a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${DataQuality.esc(s.symbol)}</a><span>${DataQuality.esc(text)}</span></li>`;
+  const sections = [
+    ["New Buy signals", changed.filter(s => buys.has(s.rating) && !buys.has(s.previous_signal.rating)).slice(0,5).map(s => link(s, `${s.previous_signal.rating} → ${s.rating}`)), changed.length ? "No new Buy signals in comparable snapshots." : "Available after the next dated refresh."],
+    ["Biggest score changes", changed.filter(s => s.score !== s.previous_signal.score).sort((a,b) => Math.abs(b.score-b.previous_signal.score)-Math.abs(a.score-a.previous_signal.score)).slice(0,5).map(s => link(s, `${s.score-s.previous_signal.score > 0 ? "+" : ""}${s.score-s.previous_signal.score} · since ${s.previous_signal.price_as_of}`)), "No score changes available."],
+    ["Elevated volume", current.filter(s => s.rvol_today >= 2).sort((a,b) => b.rvol_today-a.rvol_today).slice(0,5).map(s => link(s, `${fmt(s.rvol_today)}× · latest session`)), "No stocks above 2× relative volume in the latest session."],
+    ["Upcoming earnings", STOCKS.filter(s => s.next_earnings && Date.parse(s.next_earnings) >= new Date().setUTCHours(0,0,0,0) && Date.parse(s.next_earnings) <= Date.now()+7*86400000).sort((a,b) => a.next_earnings.localeCompare(b.next_earnings)).slice(0,5).map(s => link(s, s.next_earnings)), "No reported earnings dates in the next seven days."]
+  ];
+  document.getElementById("daily-briefing").innerHTML = `<details id="briefing-disclosure" open><summary><h2>Your daily briefing</h2><span class="briefing-hint">Expand / collapse</span></summary><p class="muted">Across the full universe · ${current.length} rated stocks. Changes compare available dated snapshots.</p><div class="briefing-grid">${sections.map(([title, rows, empty]) => `<article class="stat-card"><h3>${title}</h3>${rows.length ? `<ul>${rows.join("")}</ul>` : `<p class="muted">${empty}</p>`}</article>`).join("")}</div></details>`;
+  const disclosure = document.getElementById("briefing-disclosure");
+  try { disclosure.open = localStorage.getItem("briefing-collapsed") !== "true"; } catch {}
+  disclosure.addEventListener("toggle", () => {
+    try { localStorage.setItem("briefing-collapsed", String(!disclosure.open)); } catch {}
+  });
+}

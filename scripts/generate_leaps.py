@@ -152,6 +152,7 @@ def fetch_chain(symbol, today):
                     'last': num('lastPrice'), 'iv': num('impliedVolatility'),
                     'oi': int(num('openInterest') or 0), 'volume': int(num('volume') or 0),
                     'contract': str(c.get('contractSymbol') or ''),
+                    'last_trade_at': c.get('lastTradeDate').isoformat() if hasattr(c.get('lastTradeDate'), 'isoformat') else None,
                 })
             return rows
         calls, meta = cache.fetch(f'chain:{symbol}:{expiry}', acquire, 6 * 3600)

@@ -769,3 +769,32 @@ body { -webkit-tap-highlight-color: transparent; }
 }
 
 .data-freshness { display: block; color: var(--muted); font-size: 0.75rem; font-weight: 400; }
+
+/* Briefing and explanations are usable with touch, keyboard, and narrow screens. */
+.briefing-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:20px 0 28px; }
+.briefing-grid ul { list-style:none; padding:0; margin:0; }
+.briefing-grid li { display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); }
+.briefing-grid li span { text-align:right; color:var(--muted); font-size:.82rem; }
+.rating-explanation { white-space:normal; min-width:130px; }
+.rating-explanation summary, .confidence summary { cursor:pointer; padding:8px 0; }
+.rating-reasons { max-width:360px; min-width:200px; font-size:.82rem; line-height:1.5; text-align:left; }
+.rating-reasons > div { display:flex; justify-content:space-between; gap:12px; }
+.confidence { font-size:.72rem; color:var(--muted); white-space:normal; max-width:360px; }
+.confidence p { line-height:1.5; }
+:focus-visible { outline:2px solid var(--accent-2); outline-offset:3px; }
+@media(max-width:700px) {
+ .briefing-grid { grid-template-columns:1fr; }
+ .controls input, .controls select, .chip, .tab { min-height:44px; }
+ #stock-table td { min-width:0; flex-wrap:wrap; white-space:normal; }
+ #stock-table td[data-label="Rating"] { display:block; text-align:left; }
+ #stock-table td[data-label="Rating"]::before { display:none; }
+ #stock-table .rating-reasons { max-width:none; min-width:0; }
+ .data-freshness { flex-basis:100%; }
+ .leap-head { flex-wrap:wrap; gap:12px; }
+ table.contracts td { white-space:normal; overflow-wrap:anywhere; }
+}
+
+#briefing-disclosure > summary { cursor:pointer; padding:14px 0; min-height:44px; }
+#briefing-disclosure > summary h2 { display:inline; font-size:1.3rem; }
+.briefing-hint { display:inline-block; margin-left:12px; font-size:.75rem; color:var(--muted); }
+#briefing-disclosure:not([open]) { margin-bottom:18px; border-bottom:1px solid var(--border); }

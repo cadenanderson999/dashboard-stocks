@@ -19,3 +19,10 @@ assert.equal(expired.leap_rating, 'Stale');
 assert.equal(q.esc('<script>'), '&lt;script&gt;');
 assert.match(q.price({ price_as_of: '2026-09-09', data_quality: { prices: { stale: true } } }), /Stale/);
 console.log('Data freshness UI tests passed.');
+
+assert.match(q.confidence({trend_score: 0, momentum_score: 0, timing_score: 0, volume_score: 0, data_quality: {prices: {stale: false}}}), /4\/4/);
+assert.match(q.confidence({data_quality: {prices: {stale: true}}}), /Stale prices/);
+assert.match(q.confidence({score: 50}), /Freshness unverified/);
+assert.doesNotMatch(q.explanation({score: null, rating: 'Stale'}, 'Why?'), /rating-reasons/);
+assert.match(q.explanation({symbol:'TEST', score:1, reason:'<script>',trend_score:2}, 'Why?'), /&lt;script&gt;/);
+assert.match(q.explanation({symbol:'TEST', score:1,trend_score:2}, 'Why?'), /Unavailable/);

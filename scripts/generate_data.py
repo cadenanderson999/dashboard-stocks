@@ -513,6 +513,14 @@ def fetch_live():
                        rs_rank=None, setups=[], reason='Current price data unavailable; showing last known values.')
         details[symbol] = build_detail(f.get("info"), f.get("earnings"))
         details[symbol]['data_quality'] = rec['data_quality']
+        rec['next_earnings'] = details[symbol].get('next_earnings')
+        old = previous.get(symbol, {})
+        if (old.get('score') is not None and rec.get('score') is not None
+                and old.get('price_as_of') and rec.get('price_as_of')
+                and old['price_as_of'] < rec['price_as_of']):
+            rec['previous_signal'] = {k: old.get(k) for k in ('score', 'rating', 'price_as_of')}
+        elif old.get('price_as_of') == rec.get('price_as_of'):
+            rec['previous_signal'] = old.get('previous_signal')
 
     print(f"Built {len(records)} records ({skipped} tickers had no usable data).")
     md.store().report('stocks')

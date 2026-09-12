@@ -879,19 +879,22 @@ def pick_leap_contracts(price, chains, hv_pct=None, r=0.04, div_yield=0.0,
             bid, ask = c.get("bid") or 0.0, c.get("ask") or 0.0
             if not K or K <= 0:
                 continue
-            mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0) else (c.get("last") or 0.0)
+            valid_quote = bid > 0 and ask >= bid
+            mid = (bid + ask) / 2.0 if valid_quote else (c.get("last") or 0.0)
             if mid <= 0:
                 continue
             iv = c.get("iv")
             sigma = iv if (iv and 0.02 < iv < 5.0) else sigma_fallback
             _, delta = bs_call(price, K, T, sigma, r, div_yield)
-            spread = (ask - bid) / mid if (bid > 0 and ask > 0) else None
+            spread = (ask - bid) / mid if valid_quote else None
             intrinsic = max(price - K, 0.0)
             extrinsic = max(mid - intrinsic, 0.0)
             cands.append({
                 "expiry": ch["expiry"], "dte": ch["dte"], "strike": K,
                 "bid": round(bid, 2), "ask": round(ask, 2), "mid": round(mid, 2),
                 "last": c.get("last"), "iv": round(sigma * 100.0, 1),
+                "premium_source": "midpoint" if valid_quote else "last_trade",
+                "last_trade_at": c.get("last_trade_at"),
                 "delta": round(delta, 2), "oi": c.get("oi"), "volume": c.get("volume"),
                 "spread_pct": round(spread * 100.0, 1) if spread is not None else None,
                 "intrinsic": round(intrinsic, 2), "extrinsic": round(extrinsic, 2),

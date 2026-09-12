@@ -345,6 +345,7 @@ function breakdownCard(s) {
   return `
     <section class="stat-card">
       <h3>Strategy breakdown</h3>
+      ${DataQuality.explanation(s, "Why this rating?")}${DataQuality.confidence(s)}
       ${scoreBar("Trend", s.trend_score, -35, 35, "SMA stack, 200-day slope, 52-wk low")}
       ${scoreBar("Momentum", s.momentum_score, -35, 35, "RS rank, 12-1 momentum, highs")}
       ${scoreBar("Timing", s.timing_score, -8, 12, "pullbacks vs bear bounces")}
