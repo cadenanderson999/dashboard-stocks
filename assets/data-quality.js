@@ -4,6 +4,19 @@ window.DataQuality = {
     return String(value ?? "").replace(/[&<>"']/g, c =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   },
+  formatDate(value) {
+    if (!value) return "Unavailable";
+    const text = String(value);
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    // A market-session date is a calendar label, not midnight UTC.
+    if (day) return `${Number(day[2])}/${Number(day[3])}/${day[1]}`;
+    const date = new Date(text);
+    if (!Number.isFinite(date.getTime())) return "Unavailable";
+    const zone = { timeZone: "America/New_York" };
+    const dateText = date.toLocaleDateString("en-US", { ...zone, month:"numeric", day:"numeric", year:"numeric" });
+    const timeText = date.toLocaleTimeString("en-US", { ...zone, hour:"numeric", minute:"2-digit", hour12:true }).replace(/\s/g, "");
+    return `${dateText} · ${timeText} ET`;
+  },
   expired(value) { return !!value && Date.now() > Date.parse(value); },
   stock(row) {
     const stale = row.data_quality?.prices?.stale || this.expired(row.price_valid_until);
@@ -21,14 +34,14 @@ window.DataQuality = {
   price(row) {
     const quality = row.data_quality?.prices;
     if (!quality) return "";
-    return `<span class="data-freshness">${quality.stale ? "Stale · " : ""}As of ${this.esc(row.price_as_of || quality.as_of || "unavailable")}</span>`;
+    return `<span class="data-freshness">${quality.stale ? "Stale · " : ""}As of ${this.esc(this.formatDate(row.price_as_of || quality.as_of))}</span>`;
   },
   details(row) {
     const quality = row.data_quality;
     if (!quality) return "";
     const groups = Object.entries(quality.fundamentals || {}).map(([name, q]) => {
-      const retained = q.retained_fields?.length ? `; older fields retained: ${q.retained_fields.map(k => `${k} (${q.field_updated_at?.[k] || "date unknown"})`).join(", ")}` : "";
-      return `${name}: ${q.status}${q.reason ? ` (${q.reason})` : ""}; updated ${q.updated_at || "unavailable"}${retained}`;
+      const retained = q.retained_fields?.length ? `; older fields retained: ${q.retained_fields.map(k => `${k} (${this.formatDate(q.field_updated_at?.[k])})`).join(", ")}` : "";
+      return `${name}: ${q.status}${q.reason ? ` (${q.reason})` : ""}; updated ${this.formatDate(q.updated_at)}${retained}`;
     });
     const missing = Object.entries(quality.missing_fields || {}).map(([k, v]) => `${k}: ${v}`);
     return `<details class="stat-card"><summary>Data freshness and availability</summary>
