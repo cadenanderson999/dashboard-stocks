@@ -798,3 +798,49 @@ body { -webkit-tap-highlight-color: transparent; }
 #briefing-disclosure > summary h2 { display:inline; font-size:1.3rem; }
 .briefing-hint { display:inline-block; margin-left:12px; font-size:.75rem; color:var(--muted); }
 #briefing-disclosure:not([open]) { margin-bottom:18px; border-bottom:1px solid var(--border); }
+
+/* A quieter toolbar and stronger hierarchy for financial data. */
+body { line-height:1.5; }
+button, input, select { font:inherit; }
+h1, h2, .stock-symbol { letter-spacing:-.035em; line-height:1.2; }
+.num, .score-num, .stock-price, .stat-v, .summary .n { font-variant-numeric:tabular-nums lining-nums; }
+.name, .muted, .result-count, .data-freshness { color:#b1ada5; }
+.ticker > a { font-weight:700; letter-spacing:-.02em; }
+.ticker .name { font-weight:400; letter-spacing:0; line-height:1.4; }
+.signal-toolbar { padding:16px; background:var(--panel); border:1px solid var(--border); border-radius:16px; gap:10px; }
+.signal-toolbar #search { order:0; flex:1 1 280px; background:var(--bg); min-height:46px; }
+.signal-toolbar #sector-filter { order:1; max-width:100%; }
+.signal-toolbar .filter-menu { order:2; }
+.signal-toolbar #watchlist-toggle { order:3; }
+.signal-toolbar .sort-control { order:4; margin-left:auto; }
+.signal-toolbar #rating-filters { order:5; flex:1 1 100%; border-top:1px solid var(--border); padding-top:12px; }
+.signal-toolbar .chip, .signal-toolbar select { border-radius:9px; min-height:44px; }
+.signal-toolbar .chip.active { color:var(--text); background:#34332f; border-color:#777168; }
+.active-filters { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
+.active-filters:empty { display:none; }
+.filter-token { color:var(--text); border:1px solid var(--border); background:var(--panel-2); border-radius:8px; padding:8px 12px; cursor:pointer; font-size:.8rem; min-height:44px; }
+.filter-token span { margin-left:8px; color:var(--muted); }
+.metrics-toggle { display:none; }
+@media(max-width:700px) {
+ .signal-toolbar { padding:12px; gap:8px; }
+ .signal-toolbar #search { flex-basis:100%; min-width:0; }
+ .signal-toolbar #sector-filter { flex:1 1 60%; min-width:0; width:0; }
+ .signal-toolbar .sort-control { flex:1 1 100%; margin:0; }
+ .signal-toolbar .sort-control label { display:block; font-size:.8rem; }
+ .signal-toolbar #sort-key { flex:1; min-width:0; }
+ .signal-toolbar #watchlist-toggle { order:3; }
+ .signal-toolbar #rating-filters { flex-wrap:wrap; overflow:visible; gap:6px; }
+ .signal-toolbar #rating-filters .chip { font-size:.75rem; padding:8px 10px; }
+ #stock-table tr { padding:16px; gap:6px 16px; }
+ #stock-table td.ticker { order:0; font-size:1.18rem; border:0; margin:0; padding:0 0 6px; }
+ #stock-table td[data-label="Price"] { order:1; font-size:1.25rem; font-weight:650; text-align:left; justify-content:flex-start; }
+ #stock-table td[data-label="Price"]::before { display:none; }
+ #stock-table td[data-label="Day %"] { order:2; justify-content:flex-end; font-size:1rem; }
+ #stock-table td[data-label="Day %"]::before { display:none; }
+ #stock-table td:nth-child(n+4):nth-child(-n+12) { display:none; order:5; border-top:1px solid var(--border); padding-top:8px; font-size:.85rem; }
+ #stock-table tr.metrics-expanded td:nth-child(n+4):nth-child(-n+12) { display:flex; }
+ #stock-table td[data-label="Rating"] { order:3; margin:0; }
+ #stock-table .metrics-toggle { display:block; width:100%; min-height:44px; padding:10px 0 0; margin-top:6px; color:#c9c4ba; background:none; border:0; border-top:1px solid var(--border); text-align:left; cursor:pointer; font-size:.8rem; }
+ #stock-table .confidence summary { font-size:.75rem; padding:4px 0; }
+ #stock-table .data-freshness { font-size:.7rem; font-weight:400; }
+}

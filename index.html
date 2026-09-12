@@ -35,8 +35,8 @@
 
   <main class="wrap">
     <section id="daily-briefing" aria-label="Daily briefing"></section>
-    <section class="controls">
-      <input id="search" type="search" placeholder="Search ticker…"
+    <section class="controls signal-toolbar" aria-label="Find and filter stocks">
+      <input id="search" type="search" placeholder="Search ticker or company…"
              autocomplete="off" aria-label="Search ticker" />
       <select id="sector-filter" aria-label="Filter by sector"></select>
       <div class="filter-menu">
@@ -58,6 +58,8 @@
         <button id="sort-dir" class="chip" title="Toggle ascending / descending">↓ Desc</button>
       </div>
     </section>
+
+    <div id="active-filters" class="active-filters" aria-label="Active filters"></div>
 
     <section class="summary" id="summary"><!-- filled by JS --></section>
 
@@ -107,8 +109,8 @@
   <script src="assets/supabase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/account.js"></script>
-  <script src="assets/filters.js"></script>
-  <script src="assets/app.js"></script>
+  <script src="assets/filters.js?v=7"></script>
+  <script src="assets/app.js?v=7"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () =>

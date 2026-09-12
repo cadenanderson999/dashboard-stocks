@@ -2,6 +2,7 @@
 
 // State
 let STOCKS = [];
+const expandedMetrics = new Set();
 let LEAPS = {};       // symbol -> LEAP rating (from data/leaps.json)
 let filterRating = "all";
 let filterSector = "all";
@@ -150,6 +151,7 @@ function render() {
   rows.sort(compare);
 
   renderSummary(rows);
+  renderActiveFilters();
 
   const count = document.getElementById("result-count");
   if (count) {
@@ -183,7 +185,7 @@ function render() {
         ? `<button class="star${starred ? " on" : ""}" data-sym="${s.symbol}" aria-label="Toggle watchlist" title="Watchlist">${starred ? "★" : "☆"}</button>`
         : "";
       return `
-        <tr>
+        <tr class="${expandedMetrics.has(s.symbol) ? "metrics-expanded" : ""}">
           <td class="ticker">${star}<a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
           <td class="num" data-label="Price">$${fmt(s.price)}${DataQuality.price(s)}</td>
           <td class="num ${chgCls}" data-label="Day %">${chgStr}</td>
@@ -196,7 +198,7 @@ function render() {
           <td class="num ${rvolCls}" data-label="RVOL 30d">${fmt(s.rvol_mean)}×</td>
           <td class="num ${surgeCls}" data-label="Surge">${surgeStr}</td>
           <td class="sector-cell" data-label="Sector">${s.sector || "—"}</td>
-          <td data-label="Rating" title="${setups}">${DataQuality.explanation(s, pill(s.rating) + scoreNum(s.score))}${DataQuality.confidence(s)}${leapBadge(s.symbol)}</td>
+          <td data-label="Rating" title="${setups}">${DataQuality.explanation(s, pill(s.rating) + scoreNum(s.score))}${DataQuality.confidence(s)}${leapBadge(s.symbol)}<button class="metrics-toggle" data-symbol="${DataQuality.esc(s.symbol)}" aria-expanded="${expandedMetrics.has(s.symbol)}" aria-label="${expandedMetrics.has(s.symbol) ? "Fewer" : "More"} metrics for ${DataQuality.esc(s.symbol)}">${expandedMetrics.has(s.symbol) ? "Fewer metrics −" : "More metrics +"}</button></td>
         </tr>`;
     })
     .join("");
@@ -284,6 +286,17 @@ document.getElementById("rating-filters").addEventListener("click", (e) => {
 
 // Star toggle (event-delegated on the table body).
 document.getElementById("stock-body").addEventListener("click", (e) => {
+  const toggle = e.target.closest(".metrics-toggle");
+  if (toggle) {
+    const symbol = toggle.dataset.symbol;
+    const expanded = !expandedMetrics.has(symbol);
+    expanded ? expandedMetrics.add(symbol) : expandedMetrics.delete(symbol);
+    toggle.closest("tr").classList.toggle("metrics-expanded", expanded);
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.setAttribute("aria-label", `${expanded ? "Fewer" : "More"} metrics for ${symbol}`);
+    toggle.textContent = expanded ? "Fewer metrics −" : "More metrics +";
+    return;
+  }
   const star = e.target.closest(".star");
   if (!star) return;
   e.preventDefault();
@@ -371,3 +384,24 @@ function renderBriefing() {
     try { localStorage.setItem("briefing-collapsed", String(!disclosure.open)); } catch {}
   });
 }
+
+function renderActiveFilters() {
+  const selections = [];
+  if (searchTerm) selections.push(["search", `Search: ${searchTerm}`]);
+  if (filterSector !== "all") selections.push(["sector", filterSector]);
+  if (filterRating !== "all") selections.push(["rating", filterRating]);
+  if (filterWatchlist) selections.push(["watchlist", "Watchlist"]);
+  for (const range of FILTER?.activeFilters?.() || []) selections.push([range.key, range.label]);
+  document.getElementById("active-filters").innerHTML = selections.map(([key,label]) => `<button class="filter-token" data-remove="${DataQuality.esc(key)}" aria-label="Remove ${DataQuality.esc(label)}">${DataQuality.esc(label)} <span aria-hidden="true">×</span></button>`).join("");
+}
+document.getElementById("active-filters").addEventListener("click", e => {
+  const button = e.target.closest("[data-remove]");
+  if (!button) return;
+  const key = button.dataset.remove;
+  if (key === "search") { searchTerm = ""; document.getElementById("search").value = ""; }
+  else if (key === "sector") { filterSector = "all"; document.getElementById("sector-filter").value = "all"; }
+  else if (key === "rating") { filterRating = "all"; document.querySelectorAll("#rating-filters .chip").forEach(b => b.classList.toggle("active", b.dataset.filter === "all")); }
+  else if (key === "watchlist") { filterWatchlist = false; watchlistToggle.classList.remove("active"); watchlistToggle.setAttribute("aria-pressed", "false"); }
+  else { FILTER.remove(key); return; }
+  render();
+});

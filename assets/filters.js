@@ -120,9 +120,12 @@ window.RangeFilters = (function () {
       onChange();
     }
 
-    function open() { panel.classList.remove("hidden"); }
-    function close() { panel.classList.add("hidden"); }
-    function toggle() { panel.classList.toggle("hidden"); }
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", panel.id);
+    function open() { panel.classList.remove("hidden"); button.setAttribute("aria-expanded", "true"); }
+    function close() { panel.classList.add("hidden"); button.setAttribute("aria-expanded", "false"); }
+    function toggle() { panel.classList.contains("hidden") ? open() : close(); }
+    panel.addEventListener("keydown", e => { if (e.key === "Escape") { close(); button.focus(); } });
 
     button.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -154,6 +157,16 @@ window.RangeFilters = (function () {
           if (f.max != null && v > f.max) return false;
         }
         return true;
+      },
+      activeFilters() {
+        return keys.filter(k => state[k].min != null || state[k].max != null).map(k => ({key:k,
+          label: `${SPECS[k].label}: ${state[k].min ?? "Any"} – ${state[k].max ?? "Any"}`}));
+      },
+      remove(key) {
+        if (!state[key]) return;
+        state[key] = {min:null,max:null};
+        panel.querySelectorAll("input").forEach(i => { if (i.dataset.key === key) i.value = ""; });
+        refreshBadge(); onChange();
       },
       activeCount,
       clear: clearAll,
