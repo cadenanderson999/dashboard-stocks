@@ -18,7 +18,7 @@ def calendar():
     key = 'earnings-calendar:' + today.isoformat()
     def acquire():
         events = []
-        cal = yf.Calendars(start=today-timedelta(days=21), end=today+timedelta(days=7))
+        cal = yf.Calendars(start=today-timedelta(days=21), end=today+timedelta(days=8))
         complete = False
         for page in range(30):
             frame = cache.call(lambda: cal.get_earnings_calendar(filter_most_active=False,

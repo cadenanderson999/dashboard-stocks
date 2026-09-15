@@ -60,7 +60,7 @@ async function load() {
     const res = await fetch("data/stocks.json", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    STOCKS = (data.stocks || []).map(s => DataQuality.stock(s));
+    STOCKS = (data.stocks || []).filter(s => DataQuality.inUniverse(s)).map(s => DataQuality.stock(s));
     DataQuality.banner(data);
 
     populateSectorFilter(data.sectors || []);

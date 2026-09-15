@@ -18,6 +18,12 @@ window.DataQuality = {
     return `${dateText} · ${timeText} ET`;
   },
   expired(value) { return !!value && Date.now() > Date.parse(value); },
+  inUniverse(row) {
+    if (!row.earnings_retain_until || !row.lists?.length || row.lists.some(x => x !== "Earnings watch")) return true;
+    const parts = new Intl.DateTimeFormat("en-US", {timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+    const get = type => parts.find(p => p.type === type).value;
+    return row.earnings_retain_until >= `${get("year")}-${get("month")}-${get("day")}`;
+  },
   stock(row) {
     const stale = row.data_quality?.prices?.stale || this.expired(row.price_valid_until);
     const rated = stale ? { ...row, rating: row.price == null ? "No Data" : "Stale", score: null, rs_rank: null, setups: [],
