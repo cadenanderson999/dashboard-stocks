@@ -69,8 +69,8 @@ async function load() {
       document.getElementById("sample-banner").classList.remove("hidden");
     }
     if (data.generated_at) {
-      const d = new Date(data.generated_at);
-      document.getElementById("updated-at").textContent = d.toLocaleString();
+      const newestQuote = STOCKS.map(s => s.displayed_quote?.as_of).filter(Boolean).sort().pop();
+      document.getElementById("updated-at").textContent = `Daily signals ${DataQuality.formatDate(data.generated_at)}${newestQuote ? ` · Latest quote ${DataQuality.formatDate(newestQuote)}` : ""}`;
     }
     try {
       const earningsResponse = await fetch("data/earnings_calendar.json", {cache:"no-store"});

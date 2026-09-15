@@ -51,6 +51,7 @@ def calendar():
         'generated_at':quality.get('updated_at'), 'refresh_status':quality['status'],
         'complete':bool(data and data['complete'] and quality['status'] in ('fresh','cached')),
         'events':list(events.values())})
+    print(f"Calendar: {len(events)} retained events; page coverage complete={bool(data and data['complete'])}")
     cache.report('calendar')
 
 

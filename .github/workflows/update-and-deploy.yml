@@ -55,6 +55,7 @@ jobs:
       - name: Restore, refresh if requested, and stage site
         env:
           REFRESH: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh) }}
+          PYTHONUNBUFFERED: "1"
           YAHOO_DAILY_OPERATIONS: "5000"
           YAHOO_MIN_INTERVAL: "1.0"
           SCAN_MAX_SYMBOLS: "750"
