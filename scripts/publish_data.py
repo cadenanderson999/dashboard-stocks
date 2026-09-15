@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -50,7 +51,7 @@ def main():
         if old and old.get('is_sample') is False:
             md.atomic_json(ROOT / 'data' / name, old)
     if args.refresh:
-        if args.mode in ('full', 'calendar', 'recovery'):
+        if args.mode in ('full', 'calendar'):
             subprocess.run([sys.executable, str(ROOT/'scripts/refresh_extras.py'), 'calendar'], cwd=ROOT, check=True)
         if args.mode == 'quotes':
             subprocess.run([sys.executable, str(ROOT/'scripts/refresh_extras.py'), 'quotes'], cwd=ROOT, check=True)
@@ -66,7 +67,10 @@ def main():
         elif args.mode == 'recovery':
             tasks = tasks[:2]
         for script, outputs in tasks:
-            result = subprocess.run([sys.executable, str(ROOT / 'scripts' / script)], cwd=ROOT)
+            env = dict(os.environ)
+            if args.mode == 'recovery':
+                env['PRICE_ONLY'] = '1'
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts' / script)], cwd=ROOT, env=env)
             if result.returncode:
                 print(f'::warning::{script} could not fully refresh; retaining dated data.')
                 for name in outputs:

@@ -21,8 +21,13 @@ def calendar():
         cal = yf.Calendars(start=today-timedelta(days=21), end=today+timedelta(days=8))
         complete = False
         for page in range(30):
-            frame = cache.call(lambda: cal.get_earnings_calendar(filter_most_active=False,
-                                    limit=100, offset=page*100))
+            try:
+                frame = cache.call(lambda: cal.get_earnings_calendar(filter_most_active=False,
+                                        limit=100, offset=page*100))
+            except md.FetchError:
+                if not events:
+                    raise
+                break  # Publish known events and explicitly mark pagination incomplete.
             for symbol_index, row in frame.iterrows():
                 symbol = str(row.get('Symbol', symbol_index)).replace('.', '-').upper()
                 when = str(row.get('Event Start Date', ''))[:10]
@@ -38,6 +43,10 @@ def calendar():
                 break
         return {'events':events, 'complete':complete}
     data, quality = cache.fetch(key, acquire, 86400, network=False)
+    if data and not data['complete']:
+        entry = cache.get(key)
+        entry['expires_at'] = cache.clock()+900
+        cache.put(key, entry)
     old = md.read_json(md.ROOT/'data/earnings_calendar.json')
     # Retain dated membership even during a provider failure or partial page set.
     events = {(e['symbol'], e['date']):e for e in old.get('events', [])

@@ -2,6 +2,7 @@ name: Update data & deploy to Pages
 
 on:
   schedule:
+    - cron: "17 11 * * 1-5" # Morning daily-price recovery
     - cron: "17 13 * * 1-5" # Morning earnings discovery
     - cron: "17 15,17,19 * * 1-5" # Lightweight price snapshots
     - cron: "47 21 * * 1-5" # Completed-session signals and scanner
@@ -67,7 +68,7 @@ jobs:
             case "$SCHEDULE" in
               "17 13 * * 1-5") MODE=calendar ;;
               "17 15,17,19 * * 1-5") MODE=quotes ;;
-              "17 23 * * 1-5") MODE=recovery ;;
+              "17 11 * * 1-5"|"17 23 * * 1-5") MODE=recovery ;;
             esac
             python scripts/publish_data.py --refresh --mode "$MODE"
           else

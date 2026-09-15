@@ -490,7 +490,14 @@ def fetch_live():
     print(f"Downloading {len(symbols)} tickers from Yahoo Finance ({LOOKBACK})...")
 
     prices = download_prices(symbols)
-    fundamentals = fetch_fundamentals(symbols)
+    price_only = os.getenv('PRICE_ONLY') == '1'
+    previous_snapshot = md.read_json(OUTPUT_PATH)
+    old_rows = {r['symbol']:r for r in previous_snapshot.get('stocks', [])} if not previous_snapshot.get('is_sample') else {}
+    old_details = md.read_json(DETAILS_PATH).get('stocks', {})
+    fundamentals = ({sym: {'pe':r.get('pe'), 'market_cap':r.get('market_cap'),
+                     'quality':r.get('data_quality', {}).get('fundamentals', {}),
+                     'missing_fields':r.get('data_quality', {}).get('missing_fields', {})}
+                     for sym,r in old_rows.items()} if price_only else fetch_fundamentals(symbols))
     rs_ranks = compute_rs_ranks(prices)
 
     previous_doc = md.read_json(OUTPUT_PATH)
@@ -523,7 +530,7 @@ def fetch_live():
         if p.get('quality', {}).get('stale'):
             rec.update(rating='Stale' if rec.get('price') is not None else 'No Data', score=None,
                        rs_rank=None, setups=[], reason='Current price data unavailable; showing last known values.')
-        details[symbol] = build_detail(f.get("info"), f.get("earnings"))
+        details[symbol] = dict(old_details.get(symbol, {})) if price_only else build_detail(f.get("info"), f.get("earnings"))
         details[symbol]['data_quality'] = rec['data_quality']
         rec['next_earnings'] = meta.get('earnings_date') or details[symbol].get('next_earnings')
         rec['earnings_retain_until'] = meta.get('earnings_retain_until')
