@@ -129,10 +129,16 @@ live Yahoo availability or promise a particular coverage percentage.
 
 ## Refresh schedule and earnings membership
 
-Weekday UTC schedules: 13:17 earnings discovery, 15:17/17:17/19:17 quote snapshots,
-21:47 completed-session stocks/options/scanner, 23:17 recovery without scanner.
-During daylight saving these are 9:17AM, 11:17AM/1:17PM/3:17PM, 5:47PM and
-7:17PM Eastern; winter is one hour earlier. GitHub schedules can start late.
+Price snapshots are scheduled weekdays at **10:30AM, 1:00PM, and 4:00PM Eastern**.
+The workflow uses `America/New_York`, keeping these times through daylight saving
+changes. These are collection start times; publishing follows collection and
+GitHub schedules can start late.
+
+Other weekday UTC schedules: 11:17 daily-price recovery, 13:17 earnings discovery,
+21:47 completed-session stocks/options/scanner, and 23:17 recovery. During daylight
+saving these are 7:17AM, 9:17AM, 5:47PM, and 7:17PM Eastern; winter is one hour
+earlier. Recovery reuses company information and skips earnings discovery and the
+broad scanner to prioritize daily prices and options.
 Manual runs select full, recovery, calendar, or quotes. Pushes deploy cached data.
 
 Quote jobs use 5-minute regular-session bars, at most 800 symbols per run ordered
