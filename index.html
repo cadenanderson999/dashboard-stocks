@@ -43,6 +43,7 @@
         <button id="filter-btn" class="chip" aria-haspopup="true">Filters</button>
         <div id="filter-panel" class="filter-panel hidden"><!-- built by JS --></div>
       </div>
+      <button id="earnings-toggle" class="chip" aria-pressed="false">Earnings watch</button>
       <button id="watchlist-toggle" class="chip hidden" aria-pressed="false">★ Watchlist</button>
       <div class="filters" id="rating-filters" role="group" aria-label="Filter by rating">
         <button class="chip active" data-filter="all">All</button>
@@ -110,7 +111,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/account.js"></script>
   <script src="assets/filters.js?v=7"></script>
-  <script src="assets/app.js?v=7"></script>
+  <script src="assets/app.js?v=9"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () =>

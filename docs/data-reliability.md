@@ -125,3 +125,27 @@ Tests mock Yahoo calls: failures, partial responses, shared quotas, cooldowns,
 cache restart, incremental history, corporate actions, scanner zero-results,
 options history, sample rejection and snapshot restoration. They do not measure
 live Yahoo availability or promise a particular coverage percentage.
+
+
+## Refresh schedule and earnings membership
+
+Weekday UTC schedules: 13:17 earnings discovery, 15:17/17:17/19:17 quote snapshots,
+21:47 completed-session stocks/options/scanner, 23:17 recovery without scanner.
+During daylight saving these are 9:17AM, 11:17AM/1:17PM/3:17PM, 5:47PM and
+7:17PM Eastern; winter is one hour earlier. GitHub schedules can start late.
+Manual runs select full, recovery, calendar, or quotes. Pushes deploy cached data.
+
+Quote jobs use 5-minute regular-session bars, at most 800 symbols per run ordered
+by oldest quote, and reserve 2,000 of the 5,000 daily high-level operations for
+other work. These are delayed snapshots, not real-time quotes. Retries also consume
+budget. Completed-session signal values are never recalculated from intraday quotes.
+The broad scanner rotates 750 symbols on the full evening run only.
+
+US calendar pagination disables the most-active filter, requests 100 events/page,
+and bounds work to 30 pages, marking incomplete coverage explicitly. Membership
+starts seven calendar days before earnings and expires after the following week's
+Friday. Core stocks stay permanently. Failures preserve dated membership; updated
+future events replace earlier future dates for the same symbol. New stocks compete
+for the same budget and may initially show missing fields. Morning membership jobs
+reuse daily bars and fundamentals already in cache. Calendar metadata is public in
+`data/earnings_calendar.json`; per-job acquisition reports remain available as artifacts.

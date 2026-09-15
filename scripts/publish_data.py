@@ -12,7 +12,7 @@ import market_data as md
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / '.cache/site-data'
-DATASETS = ('stocks.json', 'details.json', 'leaps.json', 'rvol_scan.json')
+DATASETS = ('stocks.json', 'details.json', 'leaps.json', 'rvol_scan.json', 'earnings_calendar.json')
 
 
 def mark_failed(path):
@@ -42,6 +42,7 @@ def stage_site():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refresh', action='store_true')
+    parser.add_argument('--mode', choices=['full','quotes','calendar','recovery'], default='full')
     args = parser.parse_args()
     SNAPSHOT.mkdir(parents=True, exist_ok=True)
     for name in DATASETS:
@@ -49,11 +50,22 @@ def main():
         if old and old.get('is_sample') is False:
             md.atomic_json(ROOT / 'data' / name, old)
     if args.refresh:
-        for script, outputs in [
+        if args.mode in ('full', 'calendar', 'recovery'):
+            subprocess.run([sys.executable, str(ROOT/'scripts/refresh_extras.py'), 'calendar'], cwd=ROOT, check=True)
+        if args.mode == 'quotes':
+            subprocess.run([sys.executable, str(ROOT/'scripts/refresh_extras.py'), 'quotes'], cwd=ROOT, check=True)
+        tasks = [
             ('generate_data.py', ('stocks.json', 'details.json')),
             ('generate_leaps.py', ('leaps.json',)),
             ('generate_rvol_scan.py', ('rvol_scan.json',)),
-        ]:
+        ]
+        if args.mode == 'quotes':
+            tasks = []
+        elif args.mode == 'calendar':
+            tasks = tasks[:1]
+        elif args.mode == 'recovery':
+            tasks = tasks[:2]
+        for script, outputs in tasks:
             result = subprocess.run([sys.executable, str(ROOT / 'scripts' / script)], cwd=ROOT)
             if result.returncode:
                 print(f'::warning::{script} could not fully refresh; retaining dated data.')

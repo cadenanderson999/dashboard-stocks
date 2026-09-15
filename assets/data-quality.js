@@ -20,8 +20,15 @@ window.DataQuality = {
   expired(value) { return !!value && Date.now() > Date.parse(value); },
   stock(row) {
     const stale = row.data_quality?.prices?.stale || this.expired(row.price_valid_until);
-    return stale ? { ...row, rating: row.price == null ? "No Data" : "Stale", score: null, rs_rank: null, setups: [],
+    const rated = stale ? { ...row, rating: row.price == null ? "No Data" : "Stale", score: null, rs_rank: null, setups: [],
       data_quality: { ...row.data_quality, prices: { ...row.data_quality?.prices, stale: true } } } : row;
+    const quote = row.quote;
+    if (quote && Number.isFinite(quote.price) && quote.as_of &&
+        quote.as_of.slice(0,10) > (row.price_as_of || "")) {
+      return { ...rated, signal_price: row.price, price: quote.price,
+        change_pct: quote.change_pct, displayed_quote: quote };
+    }
+    return rated;
   },
   option(row, doc) {
     if (doc.refresh_status === "failed" || this.expired(row.valid_until)) {
@@ -34,7 +41,9 @@ window.DataQuality = {
   price(row) {
     const quality = row.data_quality?.prices;
     if (!quality) return "";
-    return `<span class="data-freshness">${quality.stale ? "Stale · " : ""}As of ${this.esc(this.formatDate(row.price_as_of || quality.as_of))}</span>`;
+    const quote = row.displayed_quote;
+    const stamp = quote ? `<span class="data-freshness">Quote ${this.esc(this.formatDate(quote.as_of))}${Date.now()-Date.parse(quote.as_of)>2*3600000 ? " · delayed snapshot" : ""}</span>` : "";
+    return stamp + `<span class="data-freshness">${quality.stale ? "Stale · " : ""}Daily signals through ${this.esc(this.formatDate(row.price_as_of || quality.as_of))}</span>`;
   },
   details(row) {
     const quality = row.data_quality;

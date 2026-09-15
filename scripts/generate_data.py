@@ -208,6 +208,18 @@ def build_universe(live=True):
         if meta.get("name"):
             u["name"] = meta["name"]
 
+    if live:
+        from refresh_extras import retention_end
+        from zoneinfo import ZoneInfo
+        today = datetime.now(ZoneInfo('America/New_York')).date()
+        for e in md.read_json(md.ROOT / 'data/earnings_calendar.json').get('events', []):
+            if e['retain_until'] >= today.isoformat():
+                u = slot(e['symbol'])
+                u['lists'].add('Earnings watch')
+                u['name'] = u['name'] or e.get('name')
+                if not u.get('earnings_date') or e['date'] > u['earnings_date']:
+                    u['earnings_date'] = e['date']
+                    u['earnings_retain_until'] = e['retain_until']
     # Guarantee every ticker has a sector label.
     for u in universe.values():
         u["sector"] = u["sector"] or "Other"
@@ -513,7 +525,11 @@ def fetch_live():
                        rs_rank=None, setups=[], reason='Current price data unavailable; showing last known values.')
         details[symbol] = build_detail(f.get("info"), f.get("earnings"))
         details[symbol]['data_quality'] = rec['data_quality']
-        rec['next_earnings'] = details[symbol].get('next_earnings')
+        rec['next_earnings'] = meta.get('earnings_date') or details[symbol].get('next_earnings')
+        rec['earnings_retain_until'] = meta.get('earnings_retain_until')
+        details[symbol]['next_earnings'] = rec['next_earnings']
+        if previous.get(symbol, {}).get('quote'):
+            rec['quote'] = previous[symbol]['quote']
         old = previous.get(symbol, {})
         if (old.get('score') is not None and rec.get('score') is not None
                 and old.get('price_as_of') and rec.get('price_as_of')

@@ -2,11 +2,13 @@
 
 // State
 let STOCKS = [];
+let EARNINGS = null;
 const expandedMetrics = new Set();
 let LEAPS = {};       // symbol -> LEAP rating (from data/leaps.json)
 let filterRating = "all";
 let filterSector = "all";
 let filterWatchlist = false;
+let filterEarnings = false;
 let searchTerm = "";
 let sortKey = "score";
 let sortDir = "desc"; // 'asc' | 'desc'
@@ -70,6 +72,10 @@ async function load() {
       const d = new Date(data.generated_at);
       document.getElementById("updated-at").textContent = d.toLocaleString();
     }
+    try {
+      const earningsResponse = await fetch("data/earnings_calendar.json", {cache:"no-store"});
+      if (earningsResponse.ok) EARNINGS = await earningsResponse.json();
+    } catch {}
     renderBriefing();
     render();
   } catch (err) {
@@ -144,7 +150,7 @@ function render() {
     const matchesRanges = !FILTER || FILTER.passes(s);
     const matchesWatch = !filterWatchlist ||
       (window.Account && Account.isStarred(s.symbol));
-    return matchesRating && matchesSector &&
+    return (!filterEarnings || s.lists?.includes("Earnings watch")) && matchesRating && matchesSector &&
       matchesSearch && matchesRanges && matchesWatch;
   });
 
@@ -186,7 +192,7 @@ function render() {
         : "";
       return `
         <tr class="${expandedMetrics.has(s.symbol) ? "metrics-expanded" : ""}">
-          <td class="ticker">${star}<a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
+          <td class="ticker">${star}<a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span>${s.earnings_retain_until ? `<span class="data-freshness">Earnings ${DataQuality.esc(DataQuality.formatDate(s.next_earnings))} · tracked through ${DataQuality.esc(DataQuality.formatDate(s.earnings_retain_until))}</span>` : ""}</a></td>
           <td class="num" data-label="Price">$${fmt(s.price)}${DataQuality.price(s)}</td>
           <td class="num ${chgCls}" data-label="Day %">${chgStr}</td>
           <td class="num" data-label="Mkt Cap">${fmtMarketCap(s.market_cap)}</td>
@@ -375,9 +381,9 @@ function renderBriefing() {
     ["New Buy signals", changed.filter(s => buys.has(s.rating) && !buys.has(s.previous_signal.rating)).slice(0,5).map(s => link(s, `${s.previous_signal.rating} → ${s.rating}`)), changed.length ? "No new Buy signals in comparable snapshots." : "Available after the next dated refresh."],
     ["Biggest score changes", changed.filter(s => s.score !== s.previous_signal.score).sort((a,b) => Math.abs(b.score-b.previous_signal.score)-Math.abs(a.score-a.previous_signal.score)).slice(0,5).map(s => link(s, `${s.score-s.previous_signal.score > 0 ? "+" : ""}${s.score-s.previous_signal.score} · since ${s.previous_signal.price_as_of}`)), "No score changes available."],
     ["Elevated volume", current.filter(s => s.rvol_today >= 2).sort((a,b) => b.rvol_today-a.rvol_today).slice(0,5).map(s => link(s, `${fmt(s.rvol_today)}× · latest session`)), "No stocks above 2× relative volume in the latest session."],
-    ["Upcoming earnings", STOCKS.filter(s => s.next_earnings && Date.parse(s.next_earnings) >= new Date().setUTCHours(0,0,0,0) && Date.parse(s.next_earnings) <= Date.now()+7*86400000).sort((a,b) => a.next_earnings.localeCompare(b.next_earnings)).slice(0,5).map(s => link(s, s.next_earnings)), "No reported earnings dates in the next seven days."]
+    ["Upcoming earnings", (EARNINGS?.events ? EARNINGS.events.map(e => ({symbol:e.symbol,next_earnings:e.date})) : STOCKS).filter(s => s.next_earnings && Date.parse(s.next_earnings) >= new Date().setUTCHours(0,0,0,0) && Date.parse(s.next_earnings) <= Date.now()+7*86400000).sort((a,b) => a.next_earnings.localeCompare(b.next_earnings)).slice(0,5).map(s => link(s, s.next_earnings)), "No reported earnings dates in the next seven days."]
   ];
-  document.getElementById("daily-briefing").innerHTML = `<details id="briefing-disclosure" open><summary><h2>Your daily briefing</h2><span class="briefing-hint">Expand / collapse</span></summary><p class="muted">Across the full universe · ${current.length} rated stocks. Changes compare available dated snapshots.</p><div class="briefing-grid">${sections.map(([title, rows, empty]) => `<article class="stat-card"><h3>${title}</h3>${rows.length ? `<ul>${rows.join("")}</ul>` : `<p class="muted">${empty}</p>`}</article>`).join("")}</div></details>`;
+  document.getElementById("daily-briefing").innerHTML = `<details id="briefing-disclosure" open><summary><h2>Your daily briefing</h2><span class="briefing-hint">Expand / collapse</span></summary><p class="muted">Across the full universe · ${current.length} rated stocks. Changes compare available dated snapshots. ${EARNINGS ? `US earnings calendar: ${EARNINGS.complete ? "loaded" : "partial or unavailable"} · ${DataQuality.esc(DataQuality.formatDate(EARNINGS.generated_at))}.` : ""}</p><div class="briefing-grid">${sections.map(([title, rows, empty]) => `<article class="stat-card"><h3>${title}</h3>${rows.length ? `<ul>${rows.join("")}</ul>` : `<p class="muted">${empty}</p>`}</article>`).join("")}</div></details>`;
   const disclosure = document.getElementById("briefing-disclosure");
   try { disclosure.open = localStorage.getItem("briefing-collapsed") !== "true"; } catch {}
   disclosure.addEventListener("toggle", () => {
@@ -390,6 +396,7 @@ function renderActiveFilters() {
   if (searchTerm) selections.push(["search", `Search: ${searchTerm}`]);
   if (filterSector !== "all") selections.push(["sector", filterSector]);
   if (filterRating !== "all") selections.push(["rating", filterRating]);
+  if (filterEarnings) selections.push(["earnings", "Earnings watch"]);
   if (filterWatchlist) selections.push(["watchlist", "Watchlist"]);
   for (const range of FILTER?.activeFilters?.() || []) selections.push([range.key, range.label]);
   document.getElementById("active-filters").innerHTML = selections.map(([key,label]) => `<button class="filter-token" data-remove="${DataQuality.esc(key)}" aria-label="Remove ${DataQuality.esc(label)}">${DataQuality.esc(label)} <span aria-hidden="true">×</span></button>`).join("");
@@ -401,7 +408,14 @@ document.getElementById("active-filters").addEventListener("click", e => {
   if (key === "search") { searchTerm = ""; document.getElementById("search").value = ""; }
   else if (key === "sector") { filterSector = "all"; document.getElementById("sector-filter").value = "all"; }
   else if (key === "rating") { filterRating = "all"; document.querySelectorAll("#rating-filters .chip").forEach(b => b.classList.toggle("active", b.dataset.filter === "all")); }
+  else if (key === "earnings") { filterEarnings = false; document.getElementById("earnings-toggle").setAttribute("aria-pressed", "false"); }
   else if (key === "watchlist") { filterWatchlist = false; watchlistToggle.classList.remove("active"); watchlistToggle.setAttribute("aria-pressed", "false"); }
   else { FILTER.remove(key); return; }
+  render();
+});
+
+document.getElementById("earnings-toggle").addEventListener("click", e => {
+  filterEarnings = !filterEarnings;
+  e.currentTarget.setAttribute("aria-pressed", String(filterEarnings));
   render();
 });

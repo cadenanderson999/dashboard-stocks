@@ -33,3 +33,8 @@ assert.equal(q.formatDate('2026-09-11T02:00:00Z'), '9/10/2026 · 10:00PM ET');
 assert.equal(q.formatDate('2026-09-11'), '9/11/2026');
 assert.equal(q.formatDate(null), 'Unavailable');
 assert.equal(q.formatDate('invalid'), 'Unavailable');
+const live = q.stock({price:100, price_as_of:'2026-09-11',score:60,
+ price_valid_until:'2000-01-01T00:00:00Z',quote:{price:110,as_of:'2026-09-14T15:00:00-04:00',change_pct:10}});
+assert.equal(live.price,110);
+assert.equal(live.signal_price,100);
+assert.equal(live.score,null); // fresh quotes must not revive expired ratings

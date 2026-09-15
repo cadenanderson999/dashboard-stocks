@@ -2,13 +2,21 @@ name: Update data & deploy to Pages
 
 on:
   schedule:
-    - cron: "0 22 * * 1-5"
+    - cron: "17 13 * * 1-5" # Morning earnings discovery
+    - cron: "17 15,17,19 * * 1-5" # Lightweight price snapshots
+    - cron: "47 21 * * 1-5" # Completed-session signals and scanner
+    - cron: "17 23 * * 1-5" # Recovery, without broad scanner
   workflow_dispatch:
     inputs:
       refresh:
         description: Refresh market data before deployment
         type: boolean
         default: true
+      mode:
+        description: Refresh type
+        type: choice
+        options: [recovery, full, quotes, calendar]
+        default: recovery
   push:
     branches: ["main"]
 
@@ -49,10 +57,18 @@ jobs:
           REFRESH: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh) }}
           YAHOO_DAILY_OPERATIONS: "5000"
           YAHOO_MIN_INTERVAL: "1.0"
-          SCAN_MAX_SYMBOLS: "1500"
+          SCAN_MAX_SYMBOLS: "750"
+          MANUAL_MODE: ${{ inputs.mode }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
           if [ "$REFRESH" = "true" ]; then
-            python scripts/publish_data.py --refresh
+            MODE="${MANUAL_MODE:-full}"
+            case "$SCHEDULE" in
+              "17 13 * * 1-5") MODE=calendar ;;
+              "17 15,17,19 * * 1-5") MODE=quotes ;;
+              "17 23 * * 1-5") MODE=recovery ;;
+            esac
+            python scripts/publish_data.py --refresh --mode "$MODE"
           else
             python scripts/publish_data.py
           fi
