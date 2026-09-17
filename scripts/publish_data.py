@@ -13,7 +13,7 @@ import market_data as md
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / '.cache/site-data'
-DATASETS = ('stocks.json', 'details.json', 'leaps.json', 'rvol_scan.json', 'earnings_calendar.json')
+DATASETS = ('stocks.json', 'details.json', 'leaps.json', 'rvol_scan.json')
 
 
 def mark_failed(path):
@@ -40,19 +40,49 @@ def stage_site():
         shutil.copytree(ROOT / name, stage / name, dirs_exist_ok=True)
 
 
+def remove_earnings_membership():
+    """Migrate restored snapshots before collection or a cached-only deploy."""
+    path = ROOT / 'data/stocks.json'
+    doc = md.read_json(path)
+    rows = doc.get('stocks', [])
+    removed = {r['symbol'] for r in rows if r.get('lists') == ['Earnings watch']}
+    kept = [r for r in rows if r['symbol'] not in removed]
+    for row in kept:
+        row['lists'] = [x for x in row.get('lists', []) if x != 'Earnings watch']
+        row.pop('earnings_retain_until', None)
+    if doc:
+        doc['stocks'] = kept
+        doc['count'] = len(kept)
+        doc['sectors'] = sorted({r['sector'] for r in kept if r.get('sector')})
+        md.atomic_json(path, doc)
+    for name, field in [('details.json', 'stocks'), ('leaps.json', 'candidates')]:
+        path = ROOT / 'data' / name
+        doc = md.read_json(path)
+        if not doc:
+            continue
+        if field == 'stocks':
+            doc[field] = {k:v for k,v in doc.get(field, {}).items() if k not in removed}
+        else:
+            doc[field] = [r for r in doc.get(field, []) if r['symbol'] not in removed]
+            doc['count'] = len(doc[field])
+            doc['buy_count'] = sum(r.get('leap_rating') == 'LEAP Buy' for r in doc[field])
+        md.atomic_json(path, doc)
+    for base in (ROOT / 'data', SNAPSHOT, ROOT / '_site/data'):
+        (base / 'earnings_calendar.json').unlink(missing_ok=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refresh', action='store_true')
-    parser.add_argument('--mode', choices=['full','quotes','calendar','recovery'], default='full')
+    parser.add_argument('--mode', choices=['full','quotes','recovery'], default='full')
     args = parser.parse_args()
     SNAPSHOT.mkdir(parents=True, exist_ok=True)
     for name in DATASETS:
         old = md.read_json(SNAPSHOT / name)
         if old and old.get('is_sample') is False:
             md.atomic_json(ROOT / 'data' / name, old)
+    remove_earnings_membership()
     if args.refresh:
-        if args.mode in ('full', 'calendar'):
-            subprocess.run([sys.executable, str(ROOT/'scripts/refresh_extras.py'), 'calendar'], cwd=ROOT, check=True)
         if args.mode == 'quotes':
             subprocess.run([sys.executable, str(ROOT/'scripts/refresh_extras.py'), 'quotes'], cwd=ROOT, check=True)
         tasks = [
@@ -62,8 +92,6 @@ def main():
         ]
         if args.mode == 'quotes':
             tasks = []
-        elif args.mode == 'calendar':
-            tasks = tasks[:1]
         elif args.mode == 'recovery':
             tasks = tasks[:2]
         for script, outputs in tasks:

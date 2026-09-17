@@ -41,3 +41,5 @@ assert.equal(live.score,null); // fresh quotes must not revive expired ratings
 
 assert.equal(q.inUniverse({lists:['Earnings watch'],earnings_retain_until:'2000-01-01'}),false);
 assert.equal(q.inUniverse({lists:['Earnings watch','S&P 500'],earnings_retain_until:'2000-01-01'}),true);
+
+assert.equal(q.inUniverse({lists:["Earnings watch"],earnings_retain_until:"2099-01-01"}),false);

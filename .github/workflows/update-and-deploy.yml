@@ -3,7 +3,6 @@ name: Update data & deploy to Pages
 on:
   schedule:
     - cron: "17 11 * * 1-5" # Morning daily-price recovery
-    - cron: "17 13 * * 1-5" # Morning earnings discovery
     - cron: "30 10 * * 1-5" # 10:30AM Eastern price snapshot
       timezone: America/New_York
     - cron: "0 13,16 * * 1-5" # 1PM and 4PM Eastern price snapshots
@@ -19,7 +18,7 @@ on:
       mode:
         description: Refresh type
         type: choice
-        options: [recovery, full, quotes, calendar]
+        options: [recovery, full, quotes]
         default: recovery
   push:
     branches: ["main"]
@@ -69,7 +68,6 @@ jobs:
           if [ "$REFRESH" = "true" ]; then
             MODE="${MANUAL_MODE:-full}"
             case "$SCHEDULE" in
-              "17 13 * * 1-5") MODE=calendar ;;
               "30 10 * * 1-5"|"0 13,16 * * 1-5") MODE=quotes ;;
               "17 11 * * 1-5"|"17 23 * * 1-5") MODE=recovery ;;
             esac

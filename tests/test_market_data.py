@@ -261,6 +261,25 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(md.read_json(root / 'data/leaps.json')['refresh_status'], 'unavailable')
             self.assertFalse(md.read_json(root / 'data/leaps.json')['is_sample'])
 
+    def test_earnings_cleanup_preserves_core_and_removes_related_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            md.atomic_json(root/'data/stocks.json', {'is_sample':False, 'stocks':[
+                {'symbol':'CORE','lists':['S&P 500','Earnings watch'],'price':42},
+                {'symbol':'EXTRA','lists':['Earnings watch'],'price':10}]})
+            md.atomic_json(root/'data/details.json', {'stocks':{'CORE':{},'EXTRA':{}}})
+            md.atomic_json(root/'data/leaps.json', {'candidates':[
+                {'symbol':'CORE','leap_rating':'LEAP Buy'},
+                {'symbol':'EXTRA','leap_rating':'LEAP Buy'}]})
+            md.atomic_json(root/'data/earnings_calendar.json', {'events':[]})
+            with patch.object(publish,'ROOT',root), patch.object(publish,'SNAPSHOT',root/'.cache/site-data'):
+                publish.remove_earnings_membership()
+            stocks = md.read_json(root/'data/stocks.json')
+            self.assertEqual(stocks['stocks'], [{'symbol':'CORE','lists':['S&P 500'],'price':42}])
+            self.assertEqual(list(md.read_json(root/'data/details.json')['stocks']), ['CORE'])
+            self.assertEqual(md.read_json(root/'data/leaps.json')['buy_count'], 1)
+            self.assertFalse((root/'data/earnings_calendar.json').exists())
+
     def test_failed_snapshot_retains_values_but_disables_ranking(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'stocks.json'

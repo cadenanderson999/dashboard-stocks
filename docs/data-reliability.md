@@ -127,19 +127,19 @@ options history, sample rejection and snapshot restoration. They do not measure
 live Yahoo availability or promise a particular coverage percentage.
 
 
-## Refresh schedule and earnings membership
+## Refresh schedule
 
 Price snapshots are scheduled weekdays at **10:30AM, 1:00PM, and 4:00PM Eastern**.
 The workflow uses `America/New_York`, keeping these times through daylight saving
 changes. These are collection start times; publishing follows collection and
 GitHub schedules can start late.
 
-Other weekday UTC schedules: 11:17 daily-price recovery, 13:17 earnings discovery,
+Other weekday UTC schedules: 11:17 daily-price recovery,
 21:47 completed-session stocks/options/scanner, and 23:17 recovery. During daylight
-saving these are 7:17AM, 9:17AM, 5:47PM, and 7:17PM Eastern; winter is one hour
+saving these are 7:17AM, 5:47PM, and 7:17PM Eastern; winter is one hour
 earlier. Recovery reuses company information and skips earnings discovery and the
 broad scanner to prioritize daily prices and options.
-Manual runs select full, recovery, calendar, or quotes. Pushes deploy cached data.
+Manual runs select full, recovery, or quotes. Pushes deploy cached data.
 
 Quote jobs use 5-minute regular-session bars, at most 800 symbols per run ordered
 by oldest quote, and reserve 2,000 of the 5,000 daily high-level operations for
@@ -147,11 +147,6 @@ other work. These are delayed snapshots, not real-time quotes. Retries also cons
 budget. Completed-session signal values are never recalculated from intraday quotes.
 The broad scanner rotates 750 symbols on the full evening run only.
 
-US calendar pagination disables the most-active filter, requests 100 events/page,
-and bounds work to 30 pages, marking incomplete coverage explicitly. Membership
-starts seven calendar days before earnings and expires after the following week's
-Friday. Core stocks stay permanently. Failures preserve dated membership; updated
-future events replace earlier future dates for the same symbol. New stocks compete
-for the same budget and may initially show missing fields. Morning membership jobs
-reuse daily bars and fundamentals already in cache. Calendar metadata is public in
-`data/earnings_calendar.json`; per-job acquisition reports remain available as artifacts.
+The screener contains the Robinhood and S&P 500 core lists. Market-wide earnings
+discovery and earnings-only membership are disabled. Cached-only deployments also
+remove old earnings-only stocks and their detail/LEAP entries before publishing.
