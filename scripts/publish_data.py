@@ -26,7 +26,6 @@ def mark_failed(path):
         for row in doc.get('stocks', []):
             row.setdefault('data_quality', {}).setdefault('prices', {}).update(
                 stale=True, reason='refresh_failed')
-            row.update(rating='Stale', score=None, rs_rank=None, setups=[])
     md.atomic_json(path, doc)
 
 
@@ -74,7 +73,7 @@ def remove_earnings_membership():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refresh', action='store_true')
-    parser.add_argument('--mode', choices=['full','quotes','recovery'], default='full')
+    parser.add_argument('--mode', choices=['full','quotes','signals','recovery'], default='full')
     args = parser.parse_args()
     SNAPSHOT.mkdir(parents=True, exist_ok=True)
     for name in DATASETS:
@@ -92,12 +91,16 @@ def main():
         ]
         if args.mode == 'quotes':
             tasks = []
+        elif args.mode == 'signals':
+            tasks = tasks[:1]
         elif args.mode == 'recovery':
             tasks = tasks[:2]
         for script, outputs in tasks:
             env = dict(os.environ)
-            if args.mode == 'recovery':
+            if args.mode in ('recovery', 'signals'):
                 env['PRICE_ONLY'] = '1'
+            if args.mode == 'signals':
+                env['INCLUDE_CURRENT_SESSION'] = '1'
             result = subprocess.run([sys.executable, str(ROOT / 'scripts' / script)], cwd=ROOT, env=env)
             if result.returncode:
                 print(f'::warning::{script} could not fully refresh; retaining dated data.')

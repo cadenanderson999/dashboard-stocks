@@ -143,7 +143,7 @@ def compute_rs_ranks(price_map):
     raw = {}
     for sym, p in price_map.items():
         closes = p.get("close") or []
-        if len(closes) > strat.YEAR and not p.get("quality", {}).get("stale"):
+        if len(closes) > strat.YEAR:
             raw[sym] = strat.weighted_rs_series(closes)[-1]
     return strat.percentile_ranks(raw)
 
@@ -515,15 +515,19 @@ def fetch_live():
                                'missing_fields': f.get('missing_fields', {})}
         rec['price_as_of'] = p.get('quality', {}).get('as_of') or rec.get('price_as_of')
         rec['price_valid_until'] = md.price_valid_until()
-        if p.get('quality', {}).get('stale'):
-            rec.update(rating='Stale' if rec.get('price') is not None else 'No Data', score=None,
-                       rs_rank=None, setups=[], reason='Current price data unavailable; showing last known values.')
+        if p.get('quality', {}).get('stale') and previous.get(symbol, {}).get('score') is not None:
+            for key in ('rating', 'score', 'rs_rank', 'setups', 'reason', 'trend_score', 'momentum_score', 'timing_score', 'volume_score'):
+                rec[key] = previous[symbol].get(key)
+        if not p['close'] and not previous.get(symbol):
+            rec.update(rating='No Data', score=None, rs_rank=None, setups=[])
         details[symbol] = dict(old_details.get(symbol, {})) if price_only else build_detail(f.get("info"), f.get("earnings"))
         details[symbol]['data_quality'] = rec['data_quality']
         rec['next_earnings'] = details[symbol].get('next_earnings')
         details[symbol]['next_earnings'] = rec['next_earnings']
         if previous.get(symbol, {}).get('quote'):
             rec['quote'] = previous[symbol]['quote']
+        if os.getenv('INCLUDE_CURRENT_SESSION') == '1' and not p.get('quality', {}).get('stale'):
+            rec.pop('quote', None)
         old = previous.get(symbol, {})
         if (old.get('score') is not None and rec.get('score') is not None
                 and old.get('price_as_of') and rec.get('price_as_of')

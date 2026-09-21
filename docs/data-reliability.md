@@ -57,8 +57,7 @@ SQLite gateway is not intended to coordinate concurrent collection processes.
 - A failed refresh does not erase successful cached data or its observation date.
 - Null fields in a partial fundamentals response retain prior values, with
   `retained_fields` and per-field `field_updated_at` metadata.
-- Price-stale stocks stay visible but have no current score/RS rank/LEAP screen.
-  Freshness also expires in the browser at the next expected session update.
+- Failed price updates preserve the last available signal. Age does not erase ratings in the browser.
 - Failed option refreshes expose `historical_contracts` separately from current
   contracts. Their prices, Greeks and underlying price belong to that snapshot.
 - A successfully scanned universe with zero matches publishes an empty result.
@@ -129,7 +128,7 @@ live Yahoo availability or promise a particular coverage percentage.
 
 ## Refresh schedule
 
-Price snapshots are scheduled weekdays at **10:30AM, 1:00PM, and 4:00PM Eastern**.
+Price snapshots are scheduled weekdays at **10:30AM and 1:00PM Eastern**.
 The workflow uses `America/New_York`, keeping these times through daylight saving
 changes. These are collection start times; publishing follows collection and
 GitHub schedules can start late.
@@ -139,7 +138,7 @@ Other weekday UTC schedules: 11:17 daily-price recovery,
 saving these are 7:17AM, 5:47PM, and 7:17PM Eastern; winter is one hour
 earlier. Recovery reuses company information and skips earnings discovery and the
 broad scanner to prioritize daily prices and options.
-Manual runs select full, recovery, or quotes. Pushes deploy cached data.
+Manual runs select full, recovery, signals, or quotes. Pushes deploy cached data.
 
 Quote jobs use 5-minute regular-session bars, at most 800 symbols per run ordered
 by oldest quote, and reserve 2,000 of the 5,000 daily high-level operations for
@@ -150,3 +149,16 @@ The broad scanner rotates 750 symbols on the full evening run only.
 The screener contains the Robinhood and S&P 500 core lists. Market-wide earnings
 discovery and earnings-only membership are disabled. Cached-only deployments also
 remove old earnings-only stocks and their detail/LEAP entries before publishing.
+
+## Afternoon signals and display
+
+At 3:45PM Eastern each weekday, the signals job updates daily price history,
+technicals and ratings together, using the current session’s available daily bar.
+It reuses company information and publishes without waiting for options or the
+broad scanner. This is a pre-close calculation, not an official closing signal.
+An evening refresh can replace it with the completed session. Partial-session
+history is explicitly re-fetched by the completed-session job. GitHub can delay starts.
+
+The UI preserves saved ratings and option information regardless of age and omits
+freshness badges, snapshot notices and expiry-based overrides. Acquisition metadata
+remains in the JSON for diagnosis. Missing data remains missing.

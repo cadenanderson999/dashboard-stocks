@@ -395,7 +395,6 @@ function leapCard(s, leap) {
       <h3>LEAP calls · <span class="pill ${cls}">${leap.leap_rating}</span>
         <span class="score-num">${leap.leap_score ?? "—"}/100</span></h3>
       ${checks}
-      <p class="muted small">${historical ? "Historical snapshot" : "Quote snapshot"}: ${DataQuality.esc(historical ? leap.historical_as_of : leap.chain_as_of || "unavailable")}</p>
       ${rows ? `<div class="table-scroll mini-scroll"><table class="mini-table contracts">
         <thead><tr><th>Style</th><th>Expiry</th><th class="num">Strike</th>
           <th class="num">Mid (bid–ask)</th><th class="num">Δ</th><th class="num">IV</th>

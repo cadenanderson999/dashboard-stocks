@@ -66,6 +66,20 @@ def expected_session(now=None):
     return session.strftime('%Y-%m-%d')
 
 
+def signal_session(now=None):
+    """Include today's daily bar in the afternoon signal run."""
+    if os.getenv('INCLUDE_CURRENT_SESSION') != '1':
+        return expected_session(now)
+    import exchange_calendars as xcals
+    import pandas as pd
+    now = now or datetime.now(timezone.utc)
+    cal = xcals.get_calendar('XNYS')
+    session = cal.date_to_session(pd.Timestamp(now.date()), direction='previous')
+    if cal.session_open(session).to_pydatetime() > now:
+        session = cal.previous_session(session)
+    return session.strftime('%Y-%m-%d')
+
+
 def price_valid_until():
     import exchange_calendars as xcals
     import pandas as pd
@@ -236,11 +250,12 @@ def yahoo():
 def price_history(symbol, period='2y'):
     yf = yahoo()
     cache = store()
-    target = expected_session()
+    target = signal_session()
     key = f'prices:{symbol}'
     old = cache.get(key).get('data') or {}
     sufficient = old.get('period') == '2y' or old.get('period') == period
-    same_session = old.get('dates', [''])[-1:] == [target]
+    same_session = old.get('dates', [''])[-1:] == [target] and not old.get('partial_session')
+    intraday = os.getenv('INCLUDE_CURRENT_SESSION') == '1'
 
     def acquire():
         tk = yf.Ticker(symbol)
@@ -287,6 +302,7 @@ def price_history(symbol, period='2y'):
         result = {'dates': dates, 'raw': {d: raw[d] for d in dates},
                   'period': full_period,
                   'full_at': old['full_at'] if incremental else cache.clock(),
+                  'partial_session': target > expected_session(),
                   'close': [], 'high': [], 'low': [], 'volume': []}
         for d in dates:
             close, adj, high, low, volume = raw[d]
@@ -298,7 +314,7 @@ def price_history(symbol, period='2y'):
 
     # Prices expire by exchange session, not an arbitrary 24-hour timer.
     data, meta = cache.fetch(key, acquire, ttl=86400,
-                             force=not (sufficient and same_session))
+                             force=intraday or not (sufficient and same_session))
     data = dict(data or {'dates': [], 'close': [], 'high': [], 'low': [], 'volume': []})
     as_of = data['dates'][-1] if data['dates'] else None
     stale = as_of != target or meta['status'] in ('stale', 'missing')

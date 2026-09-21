@@ -1,3 +1,4 @@
+import os
 import json
 import sys
 import tempfile
@@ -123,6 +124,20 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(result['close'], [100])
         self.assertFalse(result['quality']['stale'])
         self.assertEqual(ticker.history.call_count, 1)
+
+    def test_partial_session_is_replaced_after_close(self):
+        ticker = Mock()
+        ticker.history.side_effect = [self.frame(['2026-09-21'], [100]), self.frame(['2026-09-21'], [105])]
+        with patch('yfinance.Ticker', return_value=ticker), patch.object(md, 'signal_session', return_value='2026-09-21'):
+            with patch.dict(os.environ, {'INCLUDE_CURRENT_SESSION':'1'}), patch.object(md, 'expected_session', return_value='2026-09-18'):
+                first = md.price_history('X')
+            self.assertEqual(first['close'], [100])
+            self.assertTrue(first['partial_session'])
+            with patch.dict(os.environ, {'INCLUDE_CURRENT_SESSION':'0'}), patch.object(md, 'expected_session', return_value='2026-09-21'):
+                final = md.price_history('X')
+            self.assertEqual(final['close'], [105])
+            self.assertFalse(final['partial_session'])
+            self.assertEqual(ticker.history.call_count, 2)
 
     def test_incremental_merge_retains_old_dates_and_replaces_overlap(self):
         ticker = Mock()
@@ -289,8 +304,8 @@ class PublicationTests(unittest.TestCase):
             data = md.read_json(path)
             self.assertEqual(data['generated_at'], 'old')
             self.assertEqual(data['stocks'][0]['price'], 100)
-            self.assertIsNone(data['stocks'][0]['score'])
-            self.assertEqual(data['stocks'][0]['rating'], 'Stale')
+            self.assertEqual(data['stocks'][0]['score'], 50)
+            self.assertNotEqual(data['stocks'][0].get('rating'), 'Stale')
 
     def test_scanner_main_publishes_zero_hits_without_sample(self):
         with patch.object(scanner, 'fetch_symbols', return_value={'X': {}}), \
@@ -302,6 +317,13 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(scanner.main(), 0)
             write.assert_called_once_with([], is_sample=False)
             sample.assert_not_called()
+
+    def test_afternoon_session_and_weekend(self):
+        from datetime import datetime, timezone
+        with patch.dict(os.environ, {'INCLUDE_CURRENT_SESSION':'1'}):
+            self.assertEqual(md.signal_session(datetime(2026,9,21,19,45,tzinfo=timezone.utc)), '2026-09-21')
+            self.assertEqual(md.signal_session(datetime(2026,9,20,19,45,tzinfo=timezone.utc)), '2026-09-18')
+            self.assertEqual(md.signal_session(datetime(2026,9,21,11,0,tzinfo=timezone.utc)), '2026-09-18')
 
     def test_exchange_holiday_and_early_close(self):
         self.assertEqual(md.expected_session(datetime(2026, 9, 7, 23, tzinfo=timezone.utc)), '2026-09-04')

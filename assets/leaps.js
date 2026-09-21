@@ -115,7 +115,7 @@ function checkRow(name, c) {
 
 function contractsTable(c) {
   if (!c.contracts?.length && c.historical_contracts?.length) {
-    return `<p class="banner">Historical snapshot from ${esc(c.historical_as_of)}. Prices and calculations belong to that snapshot.</p>` +
+    return
       contractsTable({ ...c, contracts: c.historical_contracts, historical_contracts: [] });
   }
   const rows = c.contracts || [];
@@ -149,7 +149,7 @@ function contractsTable(c) {
   }).join("");
   return `
     <p class="muted small">Breakeven is at expiration using the displayed premium; midpoint is an estimate, not a guaranteed fill. Marked contracts have low open interest or wide spreads. Earnings: ${esc(c.next_earnings || "date unavailable")}.</p>
-    <p class="muted small">Chain retrieved: ${esc(c.chain_as_of || c.historical_as_of || "unknown")} · individual quote times may be older.</p>
+
     <div class="table-scroll mini-scroll">
       <table class="mini-table contracts">
         <thead><tr>

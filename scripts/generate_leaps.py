@@ -82,8 +82,6 @@ def screen(stocks, details):
     """Score every stock; return the sorted LEAP Buy / Watch candidates."""
     out = []
     for s in stocks:
-        if s.get('data_quality', {}).get('prices', {}).get('stale'):
-            continue
         d = (details or {}).get(s["symbol"]) or {}
         ls = strat.leap_score(s, d)
         if not ls or not ls["leap_rating"]:

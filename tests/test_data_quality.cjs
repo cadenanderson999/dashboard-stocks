@@ -5,24 +5,20 @@ const context = { window: {}, Date };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('assets/data-quality.js', 'utf8'), context);
 const q = context.window.DataQuality;
-const stale = q.stock({ price: 100, score: 50, rs_rank: 90,
+const stale = q.stock({ price: 100, score: 50, rs_rank: 90, rating: "Buy",
   price_valid_until: '2000-01-01T00:00:00Z' });
 assert.equal(stale.price, 100);
-assert.equal(stale.score, null);
-assert.equal(stale.rs_rank, null);
-assert.equal(stale.rating, 'Stale');
+assert.equal(stale.score, 50);
+assert.equal(stale.rs_rank, 90);
+assert.equal(stale.rating, 'Buy');
 const expired = q.option({ contracts: [{ mid: 5 }], leap_rating: 'LEAP Buy',
   valid_until: '2000-01-01T00:00:00Z', chain_as_of: '1999-12-31' }, {});
-assert.equal(expired.contracts.length, 0);
-assert.equal(expired.historical_contracts[0].mid, 5);
-assert.equal(expired.leap_rating, 'Stale');
+assert.equal(expired.contracts.length, 1);
+assert.equal(expired.contracts[0].mid, 5);
+assert.equal(expired.leap_rating, 'LEAP Buy');
 assert.equal(q.esc('<script>'), '&lt;script&gt;');
-assert.match(q.price({ price_as_of: '2026-09-09', data_quality: { prices: { stale: true } } }), /Stale/);
 console.log('Data freshness UI tests passed.');
 
-assert.match(q.confidence({trend_score: 0, momentum_score: 0, timing_score: 0, volume_score: 0, data_quality: {prices: {stale: false}}}), /4\/4/);
-assert.match(q.confidence({data_quality: {prices: {stale: true}}}), /Stale prices/);
-assert.match(q.confidence({score: 50}), /Freshness unverified/);
 assert.doesNotMatch(q.explanation({score: null, rating: 'Stale'}, 'Why?'), /rating-reasons/);
 assert.match(q.explanation({symbol:'TEST', score:1, reason:'<script>',trend_score:2}, 'Why?'), /&lt;script&gt;/);
 assert.match(q.explanation({symbol:'TEST', score:1,trend_score:2}, 'Why?'), /Unavailable/);
@@ -37,9 +33,13 @@ const live = q.stock({price:100, price_as_of:'2026-09-11',score:60,
  price_valid_until:'2000-01-01T00:00:00Z',quote:{price:110,as_of:'2026-09-14T15:00:00-04:00',change_pct:10}});
 assert.equal(live.price,110);
 assert.equal(live.signal_price,100);
-assert.equal(live.score,null); // fresh quotes must not revive expired ratings
+assert.equal(live.score,60); // age must not erase saved ratings
 
 assert.equal(q.inUniverse({lists:['Earnings watch'],earnings_retain_until:'2000-01-01'}),false);
 assert.equal(q.inUniverse({lists:['Earnings watch','S&P 500'],earnings_retain_until:'2000-01-01'}),true);
 
 assert.equal(q.inUniverse({lists:["Earnings watch"],earnings_retain_until:"2099-01-01"}),false);
+
+assert.equal(q.price({}), "");
+assert.equal(q.confidence({}), "");
+assert.equal(q.details({}), "");
