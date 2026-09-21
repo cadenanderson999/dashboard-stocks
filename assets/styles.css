@@ -243,7 +243,9 @@ tbody td { padding: 9px 7px; border-bottom: 1px solid var(--border); white-space
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--panel-2); }
 
-.ticker { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.ticker { font-weight: 700; }
+.ticker-content { display: flex; align-items: center; gap: 8px; width: 100%; }
+#stock-table tbody td { vertical-align: middle; }
 .ticker a { color: inherit; text-decoration: none; display: block; flex: 1; min-width: 0; }
 .ticker a:hover { color: var(--accent); }
 .star {
@@ -796,7 +798,7 @@ button, input, select { font:inherit; }
 h1, h2, .stock-symbol { letter-spacing:-.035em; line-height:1.2; }
 .num, .score-num, .stock-price, .stat-v, .summary .n { font-variant-numeric:tabular-nums lining-nums; }
 .name, .muted, .result-count, .data-freshness { color:#b1ada5; }
-.ticker > a { font-weight:700; letter-spacing:-.02em; }
+.ticker-content > a { font-weight:700; letter-spacing:-.02em; }
 .ticker .name { font-weight:400; letter-spacing:0; line-height:1.4; }
 .signal-toolbar { padding:16px; background:var(--panel); border:1px solid var(--border); border-radius:16px; gap:10px; }
 .signal-toolbar #search { order:0; flex:1 1 280px; background:var(--bg); min-height:46px; }

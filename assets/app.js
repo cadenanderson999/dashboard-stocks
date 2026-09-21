@@ -185,7 +185,7 @@ function render() {
         : "";
       return `
         <tr class="${expandedMetrics.has(s.symbol) ? "metrics-expanded" : ""}">
-          <td class="ticker">${star}<a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></td>
+          <td class="ticker"><div class="ticker-content">${star}<a href="stock.html?symbol=${encodeURIComponent(s.symbol)}">${s.symbol}<span class="name">${s.name || ""}</span></a></div></td>
           <td class="num" data-label="Price">$${fmt(s.price)}${DataQuality.price(s)}</td>
           <td class="num ${chgCls}" data-label="Day %">${chgStr}</td>
           <td class="num" data-label="Mkt Cap">${fmtMarketCap(s.market_cap)}</td>
