@@ -1,11 +1,11 @@
 /* Buy Side Signals service worker.
    Network-first so online visitors always get fresh data/assets; cache is only
    a fallback for offline (and enables install-to-home-screen). */
-const CACHE = "bss-v12";
+const CACHE = "bss-v13";
 const SHELL = [
   "./", "index.html", "stock.html", "leaps.html",
   "assets/data-quality.js", "assets/styles.css", "assets/app.js", "assets/leaps.js",
-  "assets/app.js?v=12", "assets/filters.js?v=7",
+  "assets/app.js?v=13", "assets/filters.js?v=7",
   "assets/stock.js", "assets/filters.js", "assets/favicon.svg",
   "assets/account.js", "assets/supabase-config.js",
   "assets/icon-192.png", "assets/icon-512.png", "assets/apple-touch-icon.png",
