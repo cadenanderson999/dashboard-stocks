@@ -269,7 +269,7 @@ def extract_earnings(ticker):
     return rows
 
 
-def fetch_fundamentals(symbols, include_earnings=True):
+def fetch_fundamentals(symbols, include_earnings=True, force=False):
     """Refresh independently cached profiles, metrics, analysts and statements."""
     yf = md.yahoo()
     cache = md.store()
@@ -291,15 +291,18 @@ def fetch_fundamentals(symbols, include_earnings=True):
                   ('metrics', (set(INFO_KEYS) | {'trailingPE', 'marketCap'}) - profile_keys - analyst_keys, md.staggered_ttl(sym, 7)),
                   ('analysts', analyst_keys, md.staggered_ttl(sym, 3))]
         combined, quality = {}, {}
+        refresh_info = force
         for group, keys, ttl in groups:
             def get_group(keys=keys):
-                response, meta = cache.fetch(f'info:{sym}', info_response, 86400)
+                nonlocal refresh_info
+                response, meta = cache.fetch(f'info:{sym}', info_response, 86400, force=refresh_info)
+                refresh_info = False
                 if meta['status'] in ('stale', 'missing'):
                     raise md.FetchError(meta.get('reason', 'provider_error'))
                 return {k: response.get(k) for k in keys}
             # The wrapper uses the same gateway; no additional Yahoo call is
             # necessary if the shared .info response is already cached.
-            value, meta = cache.fetch(f'{group}:{sym}', get_group, ttl, network=False, preserve_none=True)
+            value, meta = cache.fetch(f'{group}:{sym}', get_group, ttl, network=False, preserve_none=True, force=force)
             combined.update(value or {})
             quality[group] = meta
         earnings = []
@@ -308,14 +311,14 @@ def fetch_fundamentals(symbols, include_earnings=True):
             ttl = md.staggered_ttl(sym, 7)
             next_date = _ts_to_date(combined.get('earningsTimestampStart') or combined.get('earningsTimestamp'))
             if next_date:
-                delta = abs((datetime.fromisoformat(next_date).date() - datetime.now(timezone.utc).date()).days)
+                delta = (datetime.fromisoformat(next_date).date() - datetime.now(timezone.utc).date()).days
                 if delta <= 7:
                     ttl = 86400
                     cached_date = cache.get(f'earnings:{sym}').get('updated_at')
                     force_earnings = bool(cached_date and
                         cache.clock() - datetime.fromisoformat(cached_date).timestamp() >= 86400)
             earnings, quality['earnings'] = cache.fetch(
-                f'earnings:{sym}', lambda: extract_earnings(tk), ttl, force=force_earnings)
+                f'earnings:{sym}', lambda: extract_earnings(tk), ttl, force=force or force_earnings)
         missing = {k: ('unavailable' if quality[g]['status'] in ('fresh', 'cached')
                         else quality[g].get('reason', 'missing'))
                    for g, keys, _ in groups for k in keys if combined.get(k) is None}

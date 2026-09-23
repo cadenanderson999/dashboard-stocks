@@ -82,6 +82,9 @@ def main():
             md.atomic_json(ROOT / 'data' / name, old)
     remove_earnings_membership()
     if args.refresh:
+        # Resolve overdue earnings before prices/options can consume the budget.
+        from refresh_extras import earnings_priority
+        earnings_priority()
         if args.mode == 'quotes':
             subprocess.run([sys.executable, str(ROOT/'scripts/refresh_extras.py'), 'quotes'], cwd=ROOT, check=True)
         tasks = [

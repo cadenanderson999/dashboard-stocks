@@ -14,7 +14,7 @@ files, assets, and public JSON are staged in `_site`.
 | Company profile | Stable per-symbol interval of 1–28 days |
 | Fundamental metrics | Stable per-symbol interval of 1–7 days |
 | Analyst data | Stable per-symbol interval of 1–3 days |
-| Quarterly statements | Stable per-symbol interval of 1–7 days; daily near the reported earnings date |
+| Quarterly statements | Stable per-symbol interval of 1–7 days; daily within seven days before earnings and while overdue; priority retries every six hours |
 | Option expiry discovery | Daily |
 | Option quotes | Six hours; only for the screened shortlist |
 
@@ -36,7 +36,8 @@ operation budget is therefore **not** a claim about Yahoo's actual rate limit.
 - `YAHOO_DAILY_OPERATIONS`: shared UTC-day operation budget (default 5,000).
 - `SCAN_MAX_SYMBOLS`: symbols attempted per scanner run (default 1,500).
 
-Prices for the main universe run first, then its fundamentals, then options, then
+Overdue earnings for existing snapshot tickers run first (see below).
+Prices for the main universe follow, then its fundamentals, then options, then
 the broader scanner. The scanner rotates a persistent cursor to prevent the
 same end of the universe being skipped every day. Its `coverage` reports the
 universe, attempted/current symbols and whether results are partial. This
@@ -136,8 +137,8 @@ GitHub schedules can start late.
 Other weekday UTC schedules: 11:17 daily-price recovery,
 21:47 completed-session stocks/options/scanner, and 23:17 recovery. During daylight
 saving these are 7:17AM, 5:47PM, and 7:17PM Eastern; winter is one hour
-earlier. Recovery reuses company information and skips earnings discovery and the
-broad scanner to prioritize daily prices and options.
+earlier. Recovery reuses company information after the overdue-earnings pass and
+skips market-wide earnings discovery and the broad scanner.
 Manual runs select full, recovery, signals, or quotes. Pushes deploy cached data.
 
 Quote jobs use 5-minute regular-session bars, at most 800 symbols per run ordered
@@ -162,3 +163,33 @@ history is explicitly re-fetched by the completed-session job. GitHub can delay 
 The UI preserves saved ratings and option information regardless of age and omits
 freshness badges, snapshot notices and expiry-based overrides. Acquisition metadata
 remains in the JSON for diagnosis. Missing data remains missing.
+
+
+## Overdue earnings priority
+
+Every refresh mode runs an earnings priority pass before ordinary collection.
+A saved `next_earnings` date strictly before today's **America/New_York** date
+enters a persistent queue; today's and future dates do not. There is no seven-day
+cutoff for overdue dates. This covers existing snapshot tickers, not market-wide
+earnings discovery. Deploy-only pushes do not fetch data.
+
+Each pass attempts at most 50 eligible tickers, ordered by least recent attempt,
+then oldest due date. Attempts are spaced at least six hours apart. The pass
+bypasses both the shared company-info cache and derived fundamental caches and
+refreshes quarterly statements. It honors existing error cooldowns and stops
+starting tickers when fewer than 2,000 daily operations remain. Requests and
+retries still use the shared gateway budget.
+
+The queue records the newest stored fiscal period when a ticker becomes overdue.
+It clears only once the next date is no longer overdue **and** a newer fiscal
+period is available. Rolling the calendar forward alone does not clear it.
+This is a conservative rule: if results were already updated before the overdue
+date was detected, extra retries may continue. A provider that never advances
+its data remains pending; prioritization cannot create unpublished results.
+Empty or failed responses preserve the priority pass's saved snapshot values.
+
+Pending state lives in SQLite under `earnings_pending:<symbol>` and survives
+scheduled runs with the existing cache. `data/health-earnings.json` records
+acquisition outcomes, and quote snapshots also retain an `earnings_priority`
+summary. Cache eviction loses pending state; dates that remain overdue are
+rediscovered from the restored snapshot.
